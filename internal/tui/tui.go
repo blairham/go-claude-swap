@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/blairham/go-claude-swap/internal/account"
+	"github.com/blairham/go-claude-swap/internal/autoswitch"
 	"github.com/blairham/go-claude-swap/internal/settings"
 	"github.com/blairham/go-claude-swap/internal/switcher"
 )
@@ -104,12 +105,19 @@ func (m model) Init() tea.Cmd {
 }
 
 // collectCmd gathers snapshots off the UI goroutine. storeOnly avoids
-// network fetches (used while a mutating action holds the lane).
+// network fetches (used while a mutating action holds the lane). Even when
+// a fetch is allowed, the TUI defers to a running auto-switch engine: the
+// engine is then the only usage fetcher on the machine, and the TUI reads
+// its results from the shared store instead of double-spending the
+// endpoint's request budget.
 func collectCmd(storeOnly bool, models []string) tea.Cmd {
 	return func() tea.Msg {
 		seq, err := account.Load()
 		if err != nil {
 			return snapshotMsg{err: err.Error(), at: time.Now()}
+		}
+		if !storeOnly && autoswitch.EngineRunning() {
+			storeOnly = true
 		}
 		c := &switcher.Collector{StoreOnly: storeOnly, Models: models}
 		return snapshotMsg{snaps: c.Collect(seq), at: time.Now()}

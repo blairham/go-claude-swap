@@ -53,6 +53,24 @@ func (l *FileLock) Acquire() error {
 	}
 }
 
+// TryAcquire attempts the lock once without polling. It returns false when
+// another process holds it.
+func (l *FileLock) TryAcquire() (bool, error) {
+	if err := os.MkdirAll(filepath.Dir(l.Path), 0o700); err != nil {
+		return false, err
+	}
+	f, err := os.OpenFile(l.Path, os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return false, err
+	}
+	if err := flockNB(f); err != nil {
+		f.Close()
+		return false, nil
+	}
+	l.f = f
+	return true, nil
+}
+
 // Release drops the lock. The lock file is left on disk.
 func (l *FileLock) Release() {
 	if l.f != nil {

@@ -4,10 +4,36 @@ import (
 	"context"
 	"math"
 	"math/rand"
+	"path/filepath"
 	"time"
 
 	"github.com/blairham/go-claude-swap/internal/account"
+	"github.com/blairham/go-claude-swap/internal/locks"
+	"github.com/blairham/go-claude-swap/internal/paths"
 )
+
+// engineLockPath is the presence marker a looping engine holds so other
+// cswap processes (the TUI, list) can tell an engine is already fetching
+// usage and stay store-only, keeping the shared request budget single-owner.
+func engineLockPath() string {
+	return filepath.Join(paths.BackupRoot(), ".engine-running.lock")
+}
+
+// EngineRunning reports whether a cswap auto loop is active on this machine
+// (its presence lock is held). A probe, not a lock: callers use it to choose
+// a store-only read path.
+func EngineRunning() bool {
+	l := locks.NewFileLock(engineLockPath())
+	ok, err := l.TryAcquire()
+	if err != nil {
+		return false
+	}
+	if ok {
+		l.Release()
+		return false
+	}
+	return true
+}
 
 // Run ticks forever until ctx is canceled, then returns nil. Normal ticks
 // are spaced by the configured interval with ±10% jitter; a Blocked tick
@@ -15,6 +41,14 @@ import (
 // beyond 10 minutes), and any other Blocked tick backs off to at least 5
 // minutes. A sleep event is emitted whenever the delay exceeds 1.5×interval.
 func (e *Engine) Run(ctx context.Context) error {
+	// Hold the presence marker for the loop's lifetime so TUIs go
+	// store-only instead of double-spending the usage request budget.
+	// Best-effort: if another engine already holds it, both still behave
+	// correctly through the shared store.
+	marker := locks.NewFileLock(engineLockPath())
+	if ok, err := marker.TryAcquire(); err == nil && ok {
+		defer marker.Release()
+	}
 	for {
 		outcome, blockedReset := e.tick()
 		now := time.Now()

@@ -1,0 +1,9 @@
+# go-claude-swap tool versions managed by asdf
+# See https://asdf-vm.com for usage
+# Install all: asdf install
+
+# Go compiler — keep in sync with go.mod and CI workflow
+golang 1.26.2
+
+# Release tooling
+goreleaser 2.15.3

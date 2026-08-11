@@ -1,0 +1,22 @@
+# Gitleaks configuration for go-claude-swap
+# This file defines rules for the gitleaks security scanner
+
+title = "go-claude-swap Gitleaks Configuration"
+
+[extend]
+# Extend the default gitleaks configuration
+useDefault = true
+
+# Global allowlist for false positives in test fixtures.
+[allowlist]
+description = "Global allowlist for false positives"
+
+# Files to ignore completely
+paths = [
+    # Test files often contain fake/example credentials
+    '''.*_test\.go''',
+    # Build output
+    '''^build/''',
+    # Vendored dependencies
+    '''^vendor/''',
+]

@@ -1,0 +1,72 @@
+version: 2
+
+# GoReleaser configuration for go-claude-swap
+# See: https://goreleaser.com
+project_name: cswap
+
+builds:
+- id: cswap
+  binary: cswap
+  main: ./cmd/cswap
+  env:
+  - CGO_ENABLED=0
+  goos:
+  - linux
+  - darwin
+  - windows
+  goarch:
+  - amd64
+  - arm64
+  ignore:
+  - goos: windows
+    goarch: arm64
+  ldflags:
+  - -s -w
+  - -X github.com/blairham/go-claude-swap/internal/cmd.Version={{.Version}}
+  - -X main.commit={{.Commit}}
+  - -X main.date={{.Date}}
+
+archives:
+- id: default
+  formats:
+  - tar.gz
+  # this name template makes the OS and Arch compatible with the results of uname.
+  name_template: >-
+    {{ .ProjectName }}_ {{- title .Os }}_ {{- if eq .Arch "amd64" }}x86_64 {{- else }}{{ .Arch }}{{ end }}
+  format_overrides:
+  - goos: windows
+    formats:
+    - zip
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  groups:
+  - title: Features
+    regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+    order: 0
+  - title: Bug Fixes
+    regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+    order: 1
+  - title: Other
+    order: 999
+  filters:
+    exclude:
+    - '^docs:'
+    - '^test:'
+    - '^chore:'
+
+release:
+  draft: false
+  replace_existing_draft: true
+  target_commitish: "{{ .Commit }}"
+  prerelease: auto
+  mode: replace
+  footer: |
+    **Full Changelog**: https://github.com/blairham/go-claude-swap/compare/{{ .PreviousTag }}...{{ .Tag }}

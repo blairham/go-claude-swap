@@ -1,0 +1,35 @@
+# Pre-commit configuration for go-claude-swap
+# Install: pre-commit install
+# Run:     pre-commit run --all-files
+# Update:  pre-commit autoupdate
+
+repos:
+  # General hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^build/
+      - id: end-of-file-fixer
+        exclude: ^build/
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  # Go formatting (fast, auto-fixing)
+  - repo: https://github.com/TekWizely/pre-commit-golang
+    rev: v1.0.0-rc.4
+    hooks:
+      - id: go-mod-tidy-repo
+      - id: go-fumpt-repo
+
+  # Secret scanning
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        exclude: ^build/
+
+# Note: golangci-lint runs in CI, not pre-commit (too slow for every commit).

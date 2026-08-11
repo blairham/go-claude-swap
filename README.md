@@ -93,6 +93,11 @@ JSONL events.
   endpoint's request budget with backoff and reset-aligned scheduling) and
   switches proactively — before the limit — so a running Claude Code picks up
   the new credential while the old one still works.
+- **Service ⟷ TUI over gRPC**: a looping `cswap auto` serves a control API
+  (`pkg/swapapi`) on a unix socket in the backup root. The TUI connects to
+  it for status, streams switch events live, and goes store-only while the
+  service is running — one process owns the usage-request budget, and the
+  dashboard reads its results from the shared cache.
 
 Data lives in `~/.claude-swap-backup` (macOS) or
 `${XDG_DATA_HOME:-~/.local/share}/claude-swap` (Linux/WSL) — the same layout

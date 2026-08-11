@@ -1,0 +1,48 @@
+// The control API a running `cswap auto` loop serves over a unix socket in
+// the backup root. The TUI (and scripts) use it for presence, status, a
+// live event feed, and to request an immediate tick.
+syntax = "proto3";
+
+package cswap.v1;
+
+option go_package = "github.com/blairham/go-claude-swap/pkg/swapapi";
+
+service AutoSwitchService {
+  // GetStatus reports the running engine's effective configuration.
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+
+  // StreamEvents replays nothing and then follows the engine's event feed
+  // until the client disconnects.
+  rpc StreamEvents(StreamEventsRequest) returns (stream Event);
+
+  // Wake cuts the engine's current sleep short, triggering a tick now.
+  rpc Wake(WakeRequest) returns (WakeResponse);
+}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  string version = 1;
+  bool dry_run = 2;
+  double threshold_pct = 3;
+  double interval_seconds = 4;
+  string strategy = 5;
+  int64 started_at_unix = 6;
+}
+
+message StreamEventsRequest {}
+
+// Event mirrors the engine's JSONL event: kind plus the field payload as
+// JSON, with the pre-rendered human line for display convenience.
+message Event {
+  string kind = 1;
+  int64 ts_unix = 2;
+  string payload_json = 3;
+  string human = 4;
+}
+
+message WakeRequest {}
+
+message WakeResponse {
+  bool woken = 1;
+}

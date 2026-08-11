@@ -56,6 +56,9 @@ linters:
       - (os.File).Close
       - (*os.File).Close
       - (io.ReadCloser).Close
+      - (net.Conn).Close
+      - (net.Listener).Close
+      - (*google.golang.org/grpc.ClientConn).Close
       - (*os/exec.Cmd).Run
       - syscall.Flock
 

@@ -91,15 +91,25 @@ type Engine struct {
 	Sink   EventSink
 	Client *http.Client // nil means http.DefaultClient
 
-	unhealthy int // consecutive ticks with unknown active headroom
+	unhealthy int           // consecutive ticks with unknown active headroom
+	wakeCh    chan struct{} // Wake() requests an immediate tick
 }
 
 // NewEngine builds an Engine over cfg and sink, emitting a config-warning
 // for every out-of-range value it has to correct.
 func NewEngine(cfg Config, sink EventSink) *Engine {
-	e := &Engine{Config: cfg, Sink: sink}
+	e := &Engine{Config: cfg, Sink: sink, wakeCh: make(chan struct{}, 1)}
 	e.normalize()
 	return e
+}
+
+// Wake cuts the loop's current sleep short so the next tick runs
+// immediately. Safe from any goroutine; coalesces concurrent requests.
+func (e *Engine) Wake() {
+	select {
+	case e.wakeCh <- struct{}{}:
+	default:
+	}
 }
 
 // normalize clamps out-of-range overrides back into the settings registry's

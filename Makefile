@@ -39,4 +39,11 @@ fmt:
 tidy:
 	go mod tidy
 
+proto:
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.1
+	protoc --go_out=. --go_opt=module=github.com/blairham/go-claude-swap \
+		--go-grpc_out=. --go-grpc_opt=module=github.com/blairham/go-claude-swap \
+		pkg/swapapi/swapapi.proto
+
 check: fmt vet test

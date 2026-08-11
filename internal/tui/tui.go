@@ -4,15 +4,18 @@
 package tui
 
 import (
+	"context"
 	"strconv"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"google.golang.org/grpc"
 
 	"github.com/blairham/go-claude-swap/internal/account"
 	"github.com/blairham/go-claude-swap/internal/autoswitch"
 	"github.com/blairham/go-claude-swap/internal/settings"
 	"github.com/blairham/go-claude-swap/internal/switcher"
+	"github.com/blairham/go-claude-swap/pkg/swapapi"
 )
 
 // Poll and display cadences.
@@ -55,6 +58,19 @@ type switchDoneMsg struct {
 	err error
 }
 
+// engineConnectedMsg: the auto-switch service answered on its gRPC socket.
+type engineConnectedMsg struct {
+	status *swapapi.GetStatusResponse
+	conn   *grpc.ClientConn
+	stream grpc.ServerStreamingClient[swapapi.Event]
+}
+
+// engineEventMsg is one live event from the service's stream.
+type engineEventMsg struct{ ev *swapapi.Event }
+
+// engineGoneMsg: the service connection dropped (or was never there).
+type engineGoneMsg struct{}
+
 // model is the whole TUI state.
 type model struct {
 	page   page
@@ -80,6 +96,13 @@ type model struct {
 	toast   string
 	toastAt time.Time
 	now     time.Time
+
+	// Live connection to a running `cswap auto` service (nil when none).
+	// While connected the TUI never fetches usage itself — the service is
+	// the machine's only fetcher and this UI reads the shared store.
+	engineConn   *grpc.ClientConn
+	engineStatus *swapapi.GetStatusResponse
+	engineStream grpc.ServerStreamingClient[swapapi.Event]
 }
 
 // Run starts the full-screen TUI on the given page: "dashboard" or "watch".
@@ -99,9 +122,45 @@ func Run(pageName string) error {
 	return err
 }
 
-// Init kicks off the first collection and both tickers.
+// Init kicks off the first collection, both tickers, and the service probe.
 func (m model) Init() tea.Cmd {
-	return tea.Batch(collectCmd(false, m.models), frameTick(), pollTick())
+	return tea.Batch(collectCmd(false, m.models), frameTick(), pollTick(), connectEngineCmd())
+}
+
+// connectEngineCmd dials the service's gRPC socket and, when a live engine
+// answers, opens the event stream.
+func connectEngineCmd() tea.Cmd {
+	return func() tea.Msg {
+		conn, err := swapapi.Dial()
+		if err != nil {
+			return engineGoneMsg{}
+		}
+		client := swapapi.NewAutoSwitchServiceClient(conn)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		status, err := client.GetStatus(ctx, &swapapi.GetStatusRequest{})
+		cancel()
+		if err != nil {
+			conn.Close()
+			return engineGoneMsg{}
+		}
+		stream, err := client.StreamEvents(context.Background(), &swapapi.StreamEventsRequest{})
+		if err != nil {
+			conn.Close()
+			return engineGoneMsg{}
+		}
+		return engineConnectedMsg{status: status, conn: conn, stream: stream}
+	}
+}
+
+// recvEngineEventCmd blocks on the stream's next event.
+func recvEngineEventCmd(stream grpc.ServerStreamingClient[swapapi.Event]) tea.Cmd {
+	return func() tea.Msg {
+		ev, err := stream.Recv()
+		if err != nil {
+			return engineGoneMsg{}
+		}
+		return engineEventMsg{ev: ev}
+	}
 }
 
 // collectCmd gathers snapshots off the UI goroutine. storeOnly avoids
@@ -158,9 +217,44 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds := []tea.Cmd{pollTick()}
 		if !m.collecting {
 			m.collecting = true
-			cmds = append(cmds, collectCmd(m.busy, m.models))
+			cmds = append(cmds, collectCmd(m.busy || m.engineConn != nil, m.models))
+		}
+		if m.engineConn == nil {
+			// Cheap reconnect probe: dialing a missing socket fails fast.
+			cmds = append(cmds, connectEngineCmd())
 		}
 		return m, tea.Batch(cmds...)
+
+	case engineConnectedMsg:
+		if m.engineConn != nil {
+			// A newer connection wins (e.g. the service restarted).
+			m.engineConn.Close()
+		}
+		m.engineConn = msg.conn
+		m.engineStatus = msg.status
+		m.engineStream = msg.stream
+		return m, recvEngineEventCmd(msg.stream)
+
+	case engineEventMsg:
+		cmds := []tea.Cmd{recvEngineEventCmd(m.engineStream)}
+		if msg.ev.Kind == "switch" {
+			m.toast = msg.ev.Human
+			m.toastAt = m.now
+			if !m.collecting {
+				m.collecting = true
+				cmds = append(cmds, collectCmd(true, m.models))
+			}
+		}
+		return m, tea.Batch(cmds...)
+
+	case engineGoneMsg:
+		if m.engineConn != nil {
+			m.engineConn.Close()
+		}
+		m.engineConn = nil
+		m.engineStatus = nil
+		m.engineStream = nil
+		return m, nil
 
 	case snapshotMsg:
 		m.collecting = false

@@ -65,6 +65,8 @@ func (e *Engine) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			timer.Stop()
 			return nil
+		case <-e.wakeCh:
+			timer.Stop()
 		case <-timer.C:
 		}
 	}

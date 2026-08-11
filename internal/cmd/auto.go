@@ -9,6 +9,8 @@ import (
 	"github.com/hashicorp/cli"
 
 	"github.com/blairham/go-claude-swap/internal/autoswitch"
+	"github.com/blairham/go-claude-swap/internal/paths"
+	"github.com/blairham/go-claude-swap/pkg/swapapi"
 )
 
 // AutoCommand runs the auto-switch loop (or a single tick with --once).
@@ -87,10 +89,19 @@ func (c *AutoCommand) Run(args []string) int {
 	} else {
 		sink = autoswitch.NewHumanSink(os.Stdout)
 	}
-	engine := autoswitch.NewEngine(cfg, sink)
 
 	if opts.Once {
-		return int(engine.RunOnce())
+		return int(autoswitch.NewEngine(cfg, sink).RunOnce())
+	}
+
+	// Loop mode serves the gRPC control API on a unix socket so the TUI can
+	// see status, follow events, and stay store-only while we fetch.
+	bcast := swapapi.NewBroadcast(sink)
+	engine := autoswitch.NewEngine(cfg, bcast)
+	if srv, serr := swapapi.Serve(paths.SocketPath(), engine, bcast, Version); serr != nil {
+		c.UI.Warn("control API unavailable (" + serr.Error() + "); continuing without it")
+	} else {
+		defer srv.Stop()
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -120,6 +120,10 @@ func UsageStorePath() string { return filepath.Join(CacheDir(), "usage.json") }
 // LockPath is cswap's own switch lock.
 func LockPath() string { return filepath.Join(BackupRoot(), ".lock") }
 
+// SocketPath is the unix socket a running `cswap auto` loop serves its
+// control API on.
+func SocketPath() string { return filepath.Join(BackupRoot(), "cswap.sock") }
+
 // AccountConfigBackup names the config backup for a slot/email.
 func AccountConfigBackup(slot int, email string) string {
 	return filepath.Join(ConfigsDir(), ".claude-config-"+strconv.Itoa(slot)+"-"+email+".json")

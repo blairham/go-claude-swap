@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -132,9 +134,17 @@ func (m model) cardList(withCursor bool) string {
 	return strings.TrimSuffix(b.String(), "\n")
 }
 
-// statusString joins transient status notes: snapshot staleness, load errors.
+// statusString joins transient status notes: service state, snapshot
+// staleness, load errors.
 func (m model) statusString() string {
 	var parts []string
+	if st := m.engineStatus; st != nil {
+		mode := "live"
+		if st.DryRun {
+			mode = "dry-run"
+		}
+		parts = append(parts, fmt.Sprintf("auto: %s · %s%% · %s", mode, trimPct(st.ThresholdPct), st.Strategy))
+	}
 	if m.loadErr != "" {
 		parts = append(parts, m.loadErr)
 	}
@@ -144,6 +154,11 @@ func (m model) statusString() string {
 		}
 	}
 	return strings.Join(parts, " · ")
+}
+
+// trimPct renders 90.0 as "90" and 87.5 as "87.5".
+func trimPct(f float64) string {
+	return strconv.FormatFloat(f, 'f', -1, 64)
 }
 
 // footer renders the toast line (when one is showing) above the muted

@@ -11,6 +11,12 @@ Single static binary (`cswap`), no Python runtime required.
 ## Install
 
 ```sh
+brew install blairham/tap/cswap
+```
+
+Or with Go:
+
+```sh
 go install github.com/blairham/go-claude-swap/cmd/cswap@latest
 ```
 
@@ -43,6 +49,10 @@ cswap tui
 
 # Hands-off rotation at 90% utilization:
 cswap auto
+
+# ...or run it always-on (starts at login, restarts on crash):
+brew services start cswap     # Homebrew installs
+cswap service install         # any install: launchd (macOS) / systemd --user (Linux)
 ```
 
 ## Commands
@@ -54,6 +64,7 @@ cswap auto
 | `cswap status` | Current account |
 | `cswap switch [N\|alias\|email] [--force]` | Switch accounts (bare = rotate) |
 | `cswap auto [--once] [--dry-run] [--json]` | Auto-switch when the binding window hits the threshold |
+| `cswap service install\|uninstall\|status` | Run `cswap auto` as an always-on login service |
 | `cswap tui` / `cswap watch` | Interactive dashboard / live watch view |
 | `cswap remove` / `disable` / `enable` / `alias` / `move` | Roster management |
 | `cswap export` / `import` | Back up or migrate accounts between machines |

@@ -62,6 +62,29 @@ changelog:
     - '^test:'
     - '^chore:'
 
+# A formula (not a cask like the other tap entries) so the tap can carry a
+# `service` block: `brew services start blairham/tap/cswap` then runs the
+# auto-switch loop under launchd/systemd with keep-alive and start-at-login.
+brews:
+- name: cswap
+  repository:
+    owner: blairham
+    name: homebrew-tap
+    token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+  directory: Formula
+  homepage: https://github.com/blairham/go-claude-swap
+  description: Multi-account manager for Claude Code (Go rewrite of claude-swap)
+  license: MIT
+  install: |
+    bin.install "cswap"
+  service: |
+    run [opt_bin/"cswap", "auto"]
+    keep_alive true
+    log_path var/"log/cswap-auto.log"
+    error_log_path var/"log/cswap-auto.log"
+  test: |
+    system "#{bin}/cswap", "--version"
+
 release:
   draft: false
   replace_existing_draft: true

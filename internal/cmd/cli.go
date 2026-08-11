@@ -68,6 +68,9 @@ func CommandFactory() map[string]cli.CommandFactory {
 		"auto": func() (cli.Command, error) {
 			return &AutoCommand{UI: ui}, nil
 		},
+		"service": func() (cli.Command, error) {
+			return &ServiceCommand{UI: ui}, nil
+		},
 		"tui": func() (cli.Command, error) {
 			return &TUICommand{UI: ui, Page: "dashboard"}, nil
 		},

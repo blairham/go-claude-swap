@@ -38,6 +38,24 @@ archives:
     formats:
     - zip
 
+# macOS signing + notarization, matching ghorg, stevedore and go-pre-commit.
+# Gated on isEnvSet, so releases still succeed unsigned when the secrets are
+# absent — which is the case until MACOS_SIGN_P12 and the notary key are added
+# to this repo.
+notarize:
+  macos:
+    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+      ids:
+        - cswap
+      sign:
+        certificate: "{{.Env.MACOS_SIGN_P12}}"
+        password: "{{.Env.MACOS_SIGN_PASSWORD}}"
+      notarize:
+        issuer_id: "{{.Env.MACOS_NOTARY_ISSUER_ID}}"
+        key_id: "{{.Env.MACOS_NOTARY_KEY_ID}}"
+        key: "{{.Env.MACOS_NOTARY_KEY}}"
+        wait: true
+
 checksum:
   name_template: 'checksums.txt'
 

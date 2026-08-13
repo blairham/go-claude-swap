@@ -35,6 +35,12 @@ func CommandFactory() map[string]cli.CommandFactory {
 		"add": func() (cli.Command, error) {
 			return &AddCommand{UI: ui}, nil
 		},
+		"login": func() (cli.Command, error) {
+			return &LoginCommand{UI: ui}, nil
+		},
+		"relogin": func() (cli.Command, error) {
+			return &LoginCommand{UI: ui}, nil
+		},
 		"remove": func() (cli.Command, error) {
 			return &RemoveCommand{UI: ui}, nil
 		},

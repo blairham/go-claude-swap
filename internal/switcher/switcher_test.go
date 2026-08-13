@@ -2,14 +2,19 @@ package switcher
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"maps"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/blairham/go-claude-swap/internal/account"
 	"github.com/blairham/go-claude-swap/internal/claudecfg"
 	"github.com/blairham/go-claude-swap/internal/credentials"
+	"github.com/blairham/go-claude-swap/internal/oauth"
 	"github.com/blairham/go-claude-swap/internal/paths"
 )
 
@@ -249,6 +254,226 @@ func TestExportImportRoundTrip(t *testing.T) {
 	res, err = Import(exportPath, false)
 	if err != nil || res.Skipped != 1 {
 		t.Fatalf("re-import = %+v, %v", res, err)
+	}
+}
+
+// expiredCredJSON is a credential whose access token expired long ago,
+// forcing the pre-activation refresh path.
+func expiredCredJSON(access, refresh string) string {
+	return `{"claudeAiOauth":{"accessToken":"` + access + `","refreshToken":"` + refresh + `","expiresAt":1000}}`
+}
+
+// tokenEndpoint stubs the OAuth token endpoint, answering per refresh token.
+type tokenEndpoint struct {
+	responses map[string]tokenResp // keyed by refresh_token
+	calls     []string
+}
+
+type tokenResp struct {
+	status int
+	body   string
+}
+
+func (s *tokenEndpoint) RoundTrip(req *http.Request) (*http.Response, error) {
+	raw, _ := io.ReadAll(req.Body)
+	var payload map[string]string
+	json.Unmarshal(raw, &payload)
+	rt := payload["refresh_token"]
+	s.calls = append(s.calls, rt)
+	resp, ok := s.responses[rt]
+	if !ok {
+		resp = tokenResp{status: 400, body: `{"error":"invalid_grant"}`}
+	}
+	return &http.Response{
+		StatusCode: resp.status,
+		Body:       io.NopCloser(strings.NewReader(resp.body)),
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+	}, nil
+}
+
+func stubTokenEndpoint(t *testing.T, responses map[string]tokenResp) *tokenEndpoint {
+	t.Helper()
+	stub := &tokenEndpoint{responses: responses}
+	prev := RefreshClient
+	RefreshClient = &http.Client{Transport: stub}
+	t.Cleanup(func() { RefreshClient = prev })
+	return stub
+}
+
+func liveOAuth(t *testing.T) map[string]any {
+	t.Helper()
+	live := credentials.ReadActive()
+	var blob map[string]any
+	if json.Unmarshal([]byte(live.Value), &blob) != nil || blob["claudeAiOauth"] == nil {
+		t.Fatalf("live credential: %q", live.Value)
+	}
+	return blob["claudeAiOauth"].(map[string]any)
+}
+
+func TestSwitchRefreshesExpiredTokenBeforeActivation(t *testing.T) {
+	home := env(t)
+	login(t, home, "b@b.co", "", credJSON("at-b", "rt-b"), nil)
+	Add(0, "")
+	login(t, home, "a@b.co", "", credJSON("at-a", "rt-a"), nil)
+	Add(0, "")
+
+	// B's stored token expired while inactive.
+	if err := credentials.WriteBackup(1, "b@b.co", expiredCredJSON("at-old", "rt-b")); err != nil {
+		t.Fatal(err)
+	}
+	stub := stubTokenEndpoint(t, map[string]tokenResp{
+		"rt-b": {200, `{"access_token":"at-new","refresh_token":"rt-new","expires_in":3600}`},
+	})
+
+	res, err := SwitchTo("1", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Switched {
+		t.Fatalf("result: %+v", res)
+	}
+	if len(stub.calls) != 1 || stub.calls[0] != "rt-b" {
+		t.Fatalf("token endpoint calls: %v", stub.calls)
+	}
+
+	// The refreshed token went live and into the slot backup — Claude Code
+	// never sees the expired one.
+	oa := liveOAuth(t)
+	if oa["accessToken"] != "at-new" || oa["refreshToken"] != "rt-new" {
+		t.Errorf("live oauth = %v", oa)
+	}
+	backup, _ := credentials.ReadBackup(1, "b@b.co")
+	if !strings.Contains(backup, "at-new") {
+		t.Errorf("backup not refreshed: %q", backup)
+	}
+}
+
+func TestSwitchDeadTokenFailsClosed(t *testing.T) {
+	home := env(t)
+	login(t, home, "b@b.co", "", credJSON("at-b", "rt-b"), nil)
+	Add(0, "")
+	login(t, home, "a@b.co", "", credJSON("at-a", "rt-a"), nil)
+	Add(0, "")
+
+	// B's stored refresh lineage is dead (e.g. already consumed).
+	if err := credentials.WriteBackup(1, "b@b.co", expiredCredJSON("at-old", "rt-dead")); err != nil {
+		t.Fatal(err)
+	}
+	// Overwrite the retained .prev so it holds the same dead lineage.
+	if err := credentials.WriteBackup(1, "b@b.co", expiredCredJSON("at-old", "rt-dead")); err != nil {
+		t.Fatal(err)
+	}
+	stubTokenEndpoint(t, nil) // everything answers invalid_grant
+
+	_, err := SwitchTo("1", false)
+	if err == nil {
+		t.Fatal("switching to a dead credential must fail, not hand Claude Code a login prompt")
+	}
+	if !errors.Is(err, oauth.ErrPermanent) {
+		t.Errorf("error should wrap oauth.ErrPermanent: %v", err)
+	}
+	if !strings.Contains(err.Error(), "cswap login") {
+		t.Errorf("error should point at the repair path: %v", err)
+	}
+	// The live login must be untouched.
+	id, _ := claudecfg.ReadIdentity()
+	if id == nil || id.Email != "a@b.co" {
+		t.Error("failed switch mutated the live login")
+	}
+}
+
+func TestSwitchRecoversFromPrevGeneration(t *testing.T) {
+	home := env(t)
+	login(t, home, "b@b.co", "", credJSON("at-b", "rt-b"), nil)
+	Add(0, "")
+	login(t, home, "a@b.co", "", credJSON("at-a", "rt-a"), nil)
+	Add(0, "")
+
+	// The primary backup captured a dead lineage; the previous generation
+	// (rotated into .prev by the second write) is still alive.
+	if err := credentials.WriteBackup(1, "b@b.co", credJSON("at-prev", "rt-prev")); err != nil {
+		t.Fatal(err)
+	}
+	if err := credentials.WriteBackup(1, "b@b.co", expiredCredJSON("at-old", "rt-dead")); err != nil {
+		t.Fatal(err)
+	}
+	stub := stubTokenEndpoint(t, map[string]tokenResp{
+		"rt-prev": {200, `{"access_token":"at-rec","refresh_token":"rt-rec","expires_in":3600}`},
+	})
+
+	res, err := SwitchTo("1", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Switched {
+		t.Fatalf("result: %+v", res)
+	}
+	if len(stub.calls) != 2 || stub.calls[0] != "rt-dead" || stub.calls[1] != "rt-prev" {
+		t.Fatalf("token endpoint calls: %v", stub.calls)
+	}
+	oa := liveOAuth(t)
+	if oa["accessToken"] != "at-rec" {
+		t.Errorf("live oauth = %v", oa)
+	}
+	if len(res.Warnings) == 0 || !strings.Contains(res.Warnings[0], "recovered") {
+		t.Errorf("expected a recovery warning: %v", res.Warnings)
+	}
+}
+
+func TestForceSwitchStillBacksUpOutgoing(t *testing.T) {
+	home := env(t)
+	login(t, home, "a@b.co", "", credJSON("at-a", "rt-a"), nil)
+	Add(0, "")
+	login(t, home, "b@b.co", "", credJSON("at-b", "rt-b"), nil)
+	Add(0, "")
+
+	// Claude Code rotated B's live token since it was captured.
+	if err := os.WriteFile(filepath.Join(home, ".claude", ".credentials.json"),
+		[]byte(credJSON("at-b2", "rt-b2")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := SwitchTo("1", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Switched {
+		t.Fatalf("result: %+v", res)
+	}
+	// The rotated live credential survived into B's backup; losing it is
+	// what used to force a re-login when switching back under --force.
+	backup, _ := credentials.ReadBackup(2, "b@b.co")
+	if backup != credJSON("at-b2", "rt-b2") {
+		t.Errorf("outgoing backup = %q", backup)
+	}
+}
+
+func TestRotateSkipsDeadCredential(t *testing.T) {
+	home := env(t)
+	login(t, home, "a@b.co", "", credJSON("at-a", "rt-a"), nil)
+	Add(0, "")
+	login(t, home, "b@b.co", "", credJSON("at-b", "rt-b"), nil)
+	Add(0, "")
+
+	// A's stored credential is dead: rotation should skip it with a
+	// warning, not abort or trigger a re-login.
+	if err := credentials.WriteBackup(1, "a@b.co", expiredCredJSON("at-old", "rt-dead")); err != nil {
+		t.Fatal(err)
+	}
+	if err := credentials.WriteBackup(1, "a@b.co", expiredCredJSON("at-old", "rt-dead")); err != nil {
+		t.Fatal(err)
+	}
+	stubTokenEndpoint(t, nil)
+
+	res, err := Rotate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Reason != "no-valid-target" {
+		t.Fatalf("rotate: %+v", res)
+	}
+	if len(res.Warnings) == 0 || !strings.Contains(res.Warnings[0], "Skipped Account-1") {
+		t.Errorf("expected a skip warning: %v", res.Warnings)
 	}
 }
 

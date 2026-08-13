@@ -65,25 +65,37 @@ changelog:
 # A formula (not a cask like the other tap entries) so the tap can carry a
 # `service` block: `brew services start blairham/tap/cswap` then runs the
 # auto-switch loop under launchd/systemd with keep-alive and start-at-login.
-brews:
+homebrew_casks:
 - name: cswap
   repository:
     owner: blairham
     name: homebrew-tap
     token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-  directory: Formula
+  directory: Casks
   homepage: https://github.com/blairham/go-claude-swap
   description: Multi-account manager for Claude Code (Go rewrite of claude-swap)
   license: MIT
-  install: |
-    bin.install "cswap"
-  service: |
-    run [opt_bin/"cswap", "auto"]
-    keep_alive true
-    log_path var/"log/cswap-auto.log"
-    error_log_path var/"log/cswap-auto.log"
-  test: |
-    system "#{bin}/cswap", "--version"
+  # Casks have no `service` stanza, unlike the formula this replaced. cswap
+  # installs its own launchd/systemd unit, which is the documented path anyway
+  # and works identically on Linux.
+  caveats: |
+    The auto-switch service is managed by cswap itself, not by `brew services`:
+
+      cswap service install    # launchd (macOS) / systemd --user (Linux)
+      cswap service status
+  hooks:
+    post:
+      # Drop the download's quarantine flag, then ad-hoc sign ONLY if the
+      # binary has no valid signature already. The guard matters: if a
+      # notarize block is added later, `codesign --force` would replace a real
+      # Developer ID signature with an ad-hoc one and undo the notarization.
+      install: |
+        if OS.mac?
+          system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/cswap"]
+          if system_command("/usr/bin/codesign", args: ["-v", "#{staged_path}/cswap"]).exit_status != 0
+            system_command "/usr/bin/codesign", args: ["--force", "--sign", "-", "#{staged_path}/cswap"]
+          end
+        end
 
 release:
   draft: false

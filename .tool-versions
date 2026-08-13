@@ -3,7 +3,7 @@
 # Install all: asdf install
 
 # Go compiler — keep in sync with go.mod and CI workflow
-golang 1.26.2
+golang 1.26.1
 
 # Release tooling
 goreleaser 2.15.3

@@ -15,7 +15,7 @@ type SwitchCommand struct {
 
 // SwitchFlags for cswap switch.
 type SwitchFlags struct {
-	Force bool `long:"force" description:"Skip the already-active guard and the backup of the outgoing account"`
+	Force bool `long:"force" description:"Skip the already-active guard and switch even when backups or token refresh fail"`
 	JSON  bool `long:"json" description:"Emit machine-readable JSON"`
 }
 
@@ -26,12 +26,15 @@ func (c *SwitchCommand) Help() string {
 Switch the live Claude Code login. With no argument, rotates to the next
 switchable account in slot order. With an argument, activates that account.
 
-The switch preserves the outgoing account's credentials, splices only the
+The switch refreshes the target's OAuth token first when it is stale (so
+Claude Code never starts on a dead token and asks you to log in again),
+preserves the outgoing account's credentials, splices only the
 account-specific parts of ~/.claude.json, and holds Claude Code's own
 credential locks so a concurrent token refresh cannot collide.
 
 Options:
-      --force  Skip the already-active guard and the outgoing backup
+      --force  Skip the already-active guard; switch even when the outgoing
+               backup or the target token refresh fails
       --json   Emit machine-readable JSON
 
 Examples:

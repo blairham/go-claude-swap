@@ -60,6 +60,7 @@ cswap service install         # any install: launchd (macOS) / systemd --user (L
 | Command | Description |
 |---|---|
 | `cswap add [--slot N] [--alias NAME]` | Back up the current Claude Code login as a managed account |
+| `cswap login [N\|alias\|email]` / `relogin` | Re-authenticate an account (or add one) via the OAuth flow, without touching the live session |
 | `cswap list` / `ls` | All accounts with 5h/7d/per-model usage and reset times |
 | `cswap status` | Current account |
 | `cswap switch [N\|alias\|email] [--force]` | Switch accounts (bare = rotate) |

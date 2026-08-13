@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -25,6 +26,15 @@ import (
 	"github.com/blairham/go-claude-swap/internal/paths"
 	"github.com/blairham/go-claude-swap/internal/usage"
 )
+
+// refreshLead plus oauth.ExpiryBuffer gives the pre-activation refresh
+// margin: a stored token this close to expiry is refreshed before it is
+// made live, matching the autoswitch engine's freshen window.
+const refreshLead = 10*time.Minute - oauth.ExpiryBuffer
+
+// RefreshClient is the HTTP client used for pre-activation token refresh;
+// tests replace it to stub the token endpoint.
+var RefreshClient = &http.Client{}
 
 // Result reports a completed (or no-op) switch.
 type Result struct {
@@ -191,6 +201,10 @@ func Rotate() (*Result, error) {
 		}
 		res, serr := performSwitch(seq, slot, false)
 		if serr != nil {
+			if errors.Is(serr, oauth.ErrPermanent) {
+				warnings = append(warnings, fmt.Sprintf("Skipped Account-%d: %v", slot, serr))
+				continue
+			}
 			return nil, serr
 		}
 		res.Warnings = append(warnings, res.Warnings...)
@@ -244,6 +258,16 @@ func performSwitch(seq *account.Sequence, target int, force bool) (*Result, erro
 		}
 	}
 
+	// Refresh a stale target token before taking any locks (no network I/O
+	// may happen under them). Handing Claude Code an expired token whose
+	// refresh lineage may be dead is the direct cause of surprise re-login
+	// prompts after a switch.
+	freshCred, freshWarns, err := freshenTarget(target, targetAcct.Email, force)
+	if err != nil {
+		return nil, err
+	}
+	res.Warnings = append(res.Warnings, freshWarns...)
+
 	// Lock order: cswap's lock → CC credential locks → CC config lock.
 	// No network I/O below this point.
 	swapLock := locks.NewFileLock(paths.LockPath())
@@ -265,7 +289,7 @@ func performSwitch(seq *account.Sequence, target int, force bool) (*Result, erro
 	defer cfgLock.Release()
 
 	// Re-read the roster under the lock.
-	seq, err := account.Load()
+	seq, err = account.Load()
 	if err != nil {
 		return nil, err
 	}
@@ -274,13 +298,19 @@ func performSwitch(seq *account.Sequence, target int, force bool) (*Result, erro
 		return nil, fmt.Errorf("no account in slot %d", target)
 	}
 
-	// Read target material first: nothing is mutated until both exist.
+	// Read target material first: nothing is mutated until both exist. A
+	// just-refreshed credential overrides the stored copy — even if
+	// persisting it failed, the old refresh token is already consumed, so
+	// the in-memory bytes are the only live generation.
 	targetCreds, unreadable := credentials.ReadBackup(target, targetAcct.Email)
+	if freshCred != "" {
+		targetCreds, unreadable = freshCred, false
+	}
 	if unreadable {
 		return nil, fmt.Errorf("stored credentials for Account-%d are unreadable (Keychain locked?) — retry from a GUI session; do not re-add", target)
 	}
 	if targetCreds == "" {
-		return nil, fmt.Errorf("no stored credentials for Account-%d — re-add it with 'cswap add' while logged in as %s", target, targetAcct.Email)
+		return nil, fmt.Errorf("no stored credentials for Account-%d — run 'cswap login %d' to authenticate it", target, target)
 	}
 	targetCfg, err := os.ReadFile(paths.AccountConfigBackup(target, targetAcct.Email))
 	if err != nil {
@@ -313,23 +343,32 @@ func performSwitch(seq *account.Sequence, target int, force bool) (*Result, erro
 	}
 
 	// Preserve the outgoing credential. A failed backup aborts: the live
-	// store must never be overwritten without a surviving copy.
-	if !force && live.Value != "" && live.Value != targetCreds {
+	// store must never be overwritten without a surviving copy. Under
+	// force the backup is still attempted (skipping it discards the
+	// outgoing account's rotated refresh token, forcing a re-login on the
+	// way back), but a failure only warns instead of blocking.
+	if live.Value != "" && live.Value != targetCreds {
 		if fromSlot != 0 && liveID != nil {
 			warn, berr := backupOutgoing(seq, fromSlot, live.Value, liveCfg)
-			if berr != nil {
+			switch {
+			case berr != nil && !force:
 				return nil, fmt.Errorf("could not back up the outgoing account (refusing to overwrite it): %w", berr)
-			}
-			if warn != "" {
+			case berr != nil:
+				res.Warnings = append(res.Warnings, fmt.Sprintf("could not back up the outgoing account: %v", berr))
+			case warn != "":
 				res.Warnings = append(res.Warnings, warn)
 			}
 		} else {
 			// Unmanaged or unidentifiable live login: stash it. The stash is
 			// the license to overwrite the live store.
 			if err := StashCredential(live.Value, "displaced-live-login", fromSlot); err != nil {
-				return nil, fmt.Errorf("could not preserve the current login (refusing to overwrite it): %w", err)
+				if !force {
+					return nil, fmt.Errorf("could not preserve the current login (refusing to overwrite it): %w", err)
+				}
+				res.Warnings = append(res.Warnings, fmt.Sprintf("could not preserve the current login: %v", err))
+			} else {
+				res.Warnings = append(res.Warnings, "current login was not a managed account; its credentials were stashed (see 'cswap unclaimed')")
 			}
-			res.Warnings = append(res.Warnings, "current login was not a managed account; its credentials were stashed (see 'cswap unclaimed')")
 		}
 	}
 
@@ -404,6 +443,80 @@ func backupOutgoing(seq *account.Sequence, slot int, liveCred string, liveCfg []
 		return "", err
 	}
 	return "", writeCfg()
+}
+
+// freshenTarget prepares a slot's stored credential for activation: an
+// OAuth token at or near expiry is refreshed and persisted, so Claude Code
+// never starts on a token it cannot use. When the stored refresh lineage is
+// dead it falls back to the .prev generation before giving up. Returns the
+// refreshed credential ("" when the stored copy is fine as-is), warnings,
+// and an error only when activation would certainly force a re-login.
+func freshenTarget(slot int, email string, force bool) (string, []string, error) {
+	cred, unreadable := credentials.ReadBackup(slot, email)
+	if unreadable || cred == "" || credentials.IsAPIKey(cred) {
+		return "", nil, nil // performSwitch produces the authoritative error
+	}
+	blob, err := oauth.ParseBlob([]byte(cred))
+	if err != nil || blob.OAuth == nil {
+		return "", nil, nil
+	}
+	if !oauth.Expired(blob.OAuth.ExpiresAt, time.Now().Add(refreshLead)) {
+		return "", nil, nil
+	}
+
+	outcome := oauth.Refresh(RefreshClient, []byte(cred), time.Now)
+	switch {
+	case outcome.Err == oauth.ErrNone:
+		raw, merr := oauth.MarshalBlob(outcome.Blob)
+		if merr != nil {
+			return "", nil, nil
+		}
+		var warns []string
+		if werr := credentials.WriteBackup(slot, email, string(raw)); werr != nil {
+			warns = append(warns, fmt.Sprintf("refreshed Account-%d's token but could not persist the backup: %v", slot, werr))
+		}
+		return string(raw), warns, nil
+	case outcome.Err.Permanent():
+		// The primary lineage is dead (e.g. it captured an already-consumed
+		// refresh token); the retained previous generation may still work.
+		if fresh, warn, ok := recoverFromPrev(slot, email, cred); ok {
+			return fresh, []string{warn}, nil
+		}
+		if force {
+			return "", []string{fmt.Sprintf("Account-%d's stored token can no longer be refreshed (%s); Claude Code may ask you to log in", slot, outcome.Err)}, nil
+		}
+		return "", nil, fmt.Errorf("stored credentials for Account-%d can no longer be refreshed (%s) — run 'cswap login %d' to re-authenticate it: %w", slot, outcome.Err, slot, oauth.ErrPermanent)
+	default:
+		// Transient (network, 5xx): activate as-is — Claude Code retries
+		// the refresh itself once the endpoint is reachable.
+		return "", []string{fmt.Sprintf("could not refresh Account-%d's expired token (temporary failure); Claude Code will retry after activation", slot)}, nil
+	}
+}
+
+// recoverFromPrev tries to revive a slot whose primary backup has a dead
+// refresh lineage by refreshing the retained previous generation. On
+// success the recovered credential is promoted to the primary backup.
+func recoverFromPrev(slot int, email, deadCred string) (string, string, bool) {
+	prev, unreadable := credentials.ReadPrevBackup(slot, email)
+	if unreadable || prev == "" || credentials.IsAPIKey(prev) {
+		return "", "", false
+	}
+	if oauth.Fingerprint([]byte(prev)) == oauth.Fingerprint([]byte(deadCred)) {
+		return "", "", false
+	}
+	outcome := oauth.Refresh(RefreshClient, []byte(prev), time.Now)
+	if outcome.Err != oauth.ErrNone || outcome.Blob == nil {
+		return "", "", false
+	}
+	raw, err := oauth.MarshalBlob(outcome.Blob)
+	if err != nil {
+		return "", "", false
+	}
+	warn := fmt.Sprintf("Account-%d's stored token was dead; recovered from the previous credential generation", slot)
+	if werr := credentials.WriteBackup(slot, email, string(raw)); werr != nil {
+		warn += fmt.Sprintf(" (could not persist it: %v)", werr)
+	}
+	return string(raw), warn, true
 }
 
 // Remove deletes an account: stored credentials, config backup, roster row.

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -73,6 +74,7 @@ type Identity struct {
 	UUID             string
 	Email            string
 	OrganizationUUID string
+	OrganizationName string
 }
 
 // Outcome is the result of a refresh attempt.
@@ -198,20 +200,8 @@ func Refresh(client *http.Client, raw []byte, now func() time.Time) Outcome {
 		return Outcome{Err: classifyTokenError(resp)}
 	}
 
-	var payload struct {
-		AccessToken  string `json:"access_token"`
-		ExpiresIn    int64  `json:"expires_in"`
-		RefreshToken string `json:"refresh_token"`
-		Scope        string `json:"scope"`
-		Account      *struct {
-			UUID  string `json:"uuid"`
-			Email string `json:"email_address"`
-		} `json:"account"`
-		Organization *struct {
-			UUID string `json:"uuid"`
-		} `json:"organization"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil || payload.AccessToken == "" {
+	payload, ok := decodeTokenPayload(resp.Body)
+	if !ok {
 		return Outcome{Err: ErrTransient}
 	}
 
@@ -226,14 +216,43 @@ func Refresh(client *http.Client, raw []byte, now func() time.Time) Outcome {
 		blob.OAuth.Scopes = strings.Fields(payload.Scope)
 	}
 
-	out := Outcome{Blob: blob}
-	if payload.Account != nil && payload.Account.UUID != "" {
-		out.Identity = &Identity{UUID: payload.Account.UUID, Email: payload.Account.Email}
-		if payload.Organization != nil {
-			out.Identity.OrganizationUUID = payload.Organization.UUID
-		}
+	return Outcome{Blob: blob, Identity: payload.identity()}
+}
+
+// tokenPayload is the token endpoint's success response body.
+type tokenPayload struct {
+	AccessToken  string `json:"access_token"`
+	ExpiresIn    int64  `json:"expires_in"`
+	RefreshToken string `json:"refresh_token"`
+	Scope        string `json:"scope"`
+	Account      *struct {
+		UUID  string `json:"uuid"`
+		Email string `json:"email_address"`
+	} `json:"account"`
+	Organization *struct {
+		UUID string `json:"uuid"`
+		Name string `json:"name"`
+	} `json:"organization"`
+}
+
+func decodeTokenPayload(r io.Reader) (*tokenPayload, bool) {
+	var payload tokenPayload
+	if err := json.NewDecoder(r).Decode(&payload); err != nil || payload.AccessToken == "" {
+		return nil, false
 	}
-	return out
+	return &payload, true
+}
+
+func (p *tokenPayload) identity() *Identity {
+	if p.Account == nil || p.Account.UUID == "" {
+		return nil
+	}
+	id := &Identity{UUID: p.Account.UUID, Email: p.Account.Email}
+	if p.Organization != nil {
+		id.OrganizationUUID = p.Organization.UUID
+		id.OrganizationName = p.Organization.Name
+	}
+	return id
 }
 
 // classifyTokenError follows RFC 6749 §5.2: read the top-level "error"

@@ -151,14 +151,20 @@ func writeActiveOAuth(cred string) error {
 			clearManagedKey()
 			return nil
 		}
-		// Keychain write failed: fall to file mode and stay there — an
-		// uncleared Keychain item would shadow the file (CC reads
-		// Keychain first), so best-effort delete it.
+		// Keychain write failed: fall to file mode and stay there. The
+		// shadowing Keychain item is deleted below, after the file write
+		// succeeds — never before the replacement bytes exist somewhere.
 		PinFileMode()
-		_ = keychain.Delete(keychain.ServiceClaudeCodeOAuth, keychain.UserAccountName())
 	}
 	if err := account.WriteFileAtomic(credFile, []byte(cred), 0o600); err != nil {
 		return err
+	}
+	// File mode: an uncleared live Keychain item (from a previous account)
+	// would shadow the file — Claude Code reads the Keychain first — so
+	// delete it once the file holds the new bytes. This also covers file
+	// mode pinned by an earlier failure elsewhere in the process.
+	if keychain.Available() {
+		_ = keychain.Delete(keychain.ServiceClaudeCodeOAuth, keychain.UserAccountName())
 	}
 	clearManagedKey()
 	return nil
@@ -284,7 +290,16 @@ func MergeShared(target, live string) string {
 // Keychain was down); corrupt or absent .enc falls through to the Keychain.
 // Returns (value, unreadable, err); absent everywhere is ("", false, nil).
 func ReadBackup(slot int, email string) (string, bool) {
-	encPath := paths.AccountCredsBackup(slot, email)
+	return readBackupStore(paths.AccountCredsBackup(slot, email), keychain.BackupAccountName(slot, email))
+}
+
+// ReadPrevBackup reads the previous generation of a slot's credential backup
+// (retained by WriteBackup). Same precedence rules as ReadBackup.
+func ReadPrevBackup(slot int, email string) (string, bool) {
+	return readBackupStore(paths.AccountCredsBackup(slot, email)+".prev", keychain.BackupAccountName(slot, email)+".prev")
+}
+
+func readBackupStore(encPath, keychainAccount string) (string, bool) {
 	raw, err := os.ReadFile(encPath)
 	if err == nil {
 		decoded, derr := base64.StdEncoding.DecodeString(strings.TrimSpace(string(raw)))
@@ -297,7 +312,7 @@ func ReadBackup(slot int, email string) (string, bool) {
 	}
 
 	if keychainUsable() {
-		v, kerr := keychain.Get(keychain.ServiceSwap, keychain.BackupAccountName(slot, email))
+		v, kerr := keychain.Get(keychain.ServiceSwap, keychainAccount)
 		switch {
 		case kerr == nil:
 			return v, false

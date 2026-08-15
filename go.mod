@@ -1,6 +1,6 @@
 module github.com/blairham/go-claude-swap
 
-go 1.26.1
+go 1.26.6
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.10

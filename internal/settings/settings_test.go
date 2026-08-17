@@ -93,3 +93,39 @@ func TestParseModelNames(t *testing.T) {
 		t.Error("empty → nil")
 	}
 }
+
+func TestResolveModelNames(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", dir)
+	t.Setenv("ANTHROPIC_MODEL", "")
+
+	// "auto" with no detectable model drops out; names pass through.
+	got := ResolveModelNames([]string{"auto", "Opus"})
+	if len(got) != 1 || got[0] != "Opus" {
+		t.Errorf("auto undetectable: got %v, want [Opus]", got)
+	}
+
+	// "none" disables entirely.
+	if got := ResolveModelNames([]string{"none"}); got != nil {
+		t.Errorf("none: got %v, want nil", got)
+	}
+
+	// "auto" expands to Claude Code's configured model, deduped against
+	// an explicit spelling of the same name.
+	settingsPath := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(settingsPath, []byte(`{"model": "claude-fable-5[1m]"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got = ResolveModelNames([]string{"auto", "fable", "Opus"})
+	if len(got) != 2 || got[0] != "Fable" || got[1] != "Opus" {
+		t.Errorf("auto detected: got %v, want [Fable Opus]", got)
+	}
+}
+
+func TestModelsDefaultIsAuto(t *testing.T) {
+	withBackupRoot(t)
+	got := Load().Models()
+	if len(got) != 1 || got[0] != "auto" {
+		t.Errorf("Models() default = %v, want [auto]", got)
+	}
+}

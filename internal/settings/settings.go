@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/blairham/go-claude-swap/internal/account"
+	"github.com/blairham/go-claude-swap/internal/claudecfg"
 	"github.com/blairham/go-claude-swap/internal/paths"
 )
 
@@ -74,8 +75,8 @@ var Registry = []Spec{
 		Help: "Consecutive failed polls before an account is unhealthy",
 	},
 	{
-		Key: "autoswitch.model", Kind: KindString, Default: nil,
-		Help: "Also switch on these models' weekly limits (e.g. Fable, Fable,Opus, or all)",
+		Key: "autoswitch.model", Kind: KindString, Default: "auto",
+		Help: "Model weekly limits to also switch on: auto (follow Claude Code's model), names (e.g. Fable,Opus), all, or none",
 	},
 	{
 		Key: "ui.theme", Kind: KindChoice, Choices: []string{"dark", "light", "auto"}, Default: "auto",
@@ -134,9 +135,43 @@ func (s *Settings) Set(key string, value any) {
 }
 
 // Models parses autoswitch.model: comma-split, trimmed, case-insensitively
-// deduped (first spelling wins). Empty when unset.
+// deduped (first spelling wins). Empty when unset. Sentinels ("auto",
+// "none") pass through unexpanded — see ResolveModelNames.
 func (s *Settings) Models() []string {
 	return ParseModelNames(s.String("autoswitch.model"))
+}
+
+// ResolvedModels is Models with sentinels expanded via ResolveModelNames.
+func (s *Settings) ResolvedModels() []string {
+	return ResolveModelNames(s.Models())
+}
+
+// ResolveModelNames expands sentinels in a parsed model list: "auto" becomes
+// the model Claude Code is currently configured to use (dropped when that is
+// undetectable or has no per-model window), and "none" is discarded, so
+// "none" alone disables model windows. Real names pass through. Resolve at
+// decision time, not once at startup — the model can change while a service
+// runs.
+func ResolveModelNames(models []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(name string) {
+		if name == "" || seen[strings.ToLower(name)] {
+			return
+		}
+		seen[strings.ToLower(name)] = true
+		out = append(out, name)
+	}
+	for _, m := range models {
+		switch strings.ToLower(m) {
+		case "none":
+		case "auto":
+			add(claudecfg.ActiveModelWindow())
+		default:
+			add(m)
+		}
+	}
+	return out
 }
 
 // ParseModelNames splits a comma-separated model list.

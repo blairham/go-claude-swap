@@ -111,7 +111,7 @@ func Run(pageName string) error {
 	m := model{
 		themeName: s.String("ui.theme"),
 		threshold: s.Float("autoswitch.threshold"),
-		models:    s.Models(),
+		models:    s.ResolvedModels(),
 		now:       time.Now(),
 	}
 	m.pal = paletteFor(m.themeName)

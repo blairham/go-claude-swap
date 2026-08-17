@@ -74,7 +74,7 @@ func (c *StatusCommand) Run(args []string) int {
 		return 0
 	}
 
-	col := &switcher.Collector{Models: settings.Load().Models()}
+	col := &switcher.Collector{Models: settings.Load().ResolvedModels()}
 	snaps := col.Collect(seq)
 	now := time.Now()
 	var snap *switcher.Snapshot

@@ -94,6 +94,13 @@ JSONL events.
   endpoint's request budget with backoff and reset-aligned scheduling) and
   switches proactively — before the limit — so a running Claude Code picks up
   the new credential while the old one still works.
+- **Model-aware**: the binding window is the worst of 5h, 7d, and the watched
+  models' weekly limits. By default (`autoswitch.model auto`) cswap watches
+  the model Claude Code is currently using — `$ANTHROPIC_MODEL`, then the
+  `model` key in `~/.claude/settings.json` — re-detected on every poll. So
+  when you're on Fable and an account's Fable weekly window fills up, the
+  rotation lands on the account with the most Fable headroom left, even if
+  the exhausted account's overall 7d window still looks healthy.
 - **Service ⟷ TUI over gRPC**: a looping `cswap auto` serves a control API
   (`pkg/swapapi`) on a unix socket in the backup root. The TUI connects to
   it for status, streams switch events live, and goes store-only while the
@@ -109,7 +116,9 @@ as the original claude-swap, so both tools can coexist.
 ```sh
 cswap config set autoswitch.threshold 85
 cswap config set autoswitch.strategy consume-first
-cswap config set autoswitch.model Fable        # also watch per-model weekly limits
+cswap config set autoswitch.model auto         # follow Claude Code's model (default)
+cswap config set autoswitch.model Fable,Opus   # or pin the watched weekly limits
+cswap config set autoswitch.model none         # 5h/7d windows only
 cswap config set ui.theme light
 ```
 

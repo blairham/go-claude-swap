@@ -27,7 +27,7 @@ type AutoFlags struct {
 	Threshold float64 `long:"threshold" description:"Switch threshold percent"`
 	Cooldown  float64 `long:"cooldown" description:"Minimum seconds between proactive switches"`
 	Strategy  string  `long:"strategy" choice:"best" choice:"consume-first" description:"Target selection strategy"`
-	Model     string  `long:"model" description:"Comma-separated model display names (or 'all')"`
+	Model     string  `long:"model" description:"Comma-separated model display names, 'auto', 'all', or 'none'"`
 }
 
 // Help text.
@@ -35,8 +35,10 @@ func (c *AutoCommand) Help() string {
 	return `Usage: cswap auto [options]
 
 Watch the active account's usage and switch automatically when its binding
-5h/7d window reaches the threshold (default 90%). Runs in the foreground;
-use --once from cron or a systemd timer.
+window reaches the threshold (default 90%). The binding window is the worst
+of 5h, 7d, and the watched models' weekly limits — by default the model
+Claude Code is currently using (e.g. Fable), re-detected on every poll.
+Runs in the foreground; use --once from cron or a systemd timer.
 
 Exit codes with --once: 0 switched, 1 error, 2 no action, 3 blocked.
 
@@ -48,7 +50,8 @@ Options:
       --threshold PCT    Switch threshold (default 90)
       --cooldown SECS    Minimum seconds between proactive switches
       --strategy NAME    best | consume-first
-      --model NAMES      Also watch these models' weekly limits
+      --model NAMES      Model weekly limits to watch: names (Fable,Opus),
+                         auto (Claude Code's model), all, or none
 `
 }
 

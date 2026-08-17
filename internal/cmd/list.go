@@ -55,7 +55,7 @@ func (c *ListCommand) Run(args []string) int {
 		return 1
 	}
 
-	col := &switcher.Collector{Models: settings.Load().Models()}
+	col := &switcher.Collector{Models: settings.Load().ResolvedModels()}
 	snaps := col.Collect(seq)
 	now := time.Now()
 

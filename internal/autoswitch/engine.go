@@ -52,14 +52,14 @@ const (
 
 // Config is the effective auto-switch tuning for one engine.
 type Config struct {
-	Threshold      float64 // switch when active utilization reaches this pct
-	Interval       float64 // seconds between polls
-	Cooldown       float64 // min seconds between proactive switches
-	Hysteresis     float64 // target must beat active headroom by this many pct
-	Strategy       string  // "best" or "consume-first"
-	IncludeAPIKey  bool    // allow rotating onto managed API-key accounts
-	UnhealthyTicks int     // unknown-headroom ticks before failover
-	Models         []string
+	Threshold      float64  // switch when active utilization reaches this pct
+	Interval       float64  // seconds between polls
+	Cooldown       float64  // min seconds between proactive switches
+	Hysteresis     float64  // target must beat active headroom by this many pct
+	Strategy       string   // "best" or "consume-first"
+	IncludeAPIKey  bool     // allow rotating onto managed API-key accounts
+	UnhealthyTicks int      // unknown-headroom ticks before failover
+	Models         []string // raw list; may contain the "auto"/"none" sentinels
 	DryRun         bool
 }
 
@@ -93,6 +93,7 @@ type Engine struct {
 
 	unhealthy int           // consecutive ticks with unknown active headroom
 	wakeCh    chan struct{} // Wake() requests an immediate tick
+	models    []string      // Config.Models with sentinels resolved, per tick
 }
 
 // NewEngine builds an Engine over cfg and sink, emitting a config-warning
@@ -150,6 +151,9 @@ type candidate struct {
 // epoch when the outcome is Blocked because every account is exhausted (0
 // otherwise); the runner uses it to sleep until just past the reset.
 func (e *Engine) tick() (Outcome, int64) {
+	// Re-resolve "auto" every tick: the model Claude Code uses (and with it
+	// which per-model weekly window binds, e.g. Fable's) can change mid-run.
+	e.models = settings.ResolveModelNames(e.Models)
 	if err := paths.EnsureDirs(); err != nil {
 		e.errorEvent("preparing backup dirs: "+err.Error(), false)
 		return OutcomeError, 0
@@ -162,7 +166,7 @@ func (e *Engine) tick() (Outcome, int64) {
 	e.releaseStaleQuarantines(seq)
 	st := loadState()
 
-	coll := &switcher.Collector{Client: e.Client, Models: e.Models}
+	coll := &switcher.Collector{Client: e.Client, Models: e.models}
 	snaps := coll.Collect(seq)
 
 	head := make(map[string]*float64, len(snaps))
@@ -171,7 +175,7 @@ func (e *Engine) tick() (Outcome, int64) {
 		s := &snaps[i]
 		head[strconv.Itoa(s.Slot)] = nil
 		if s.Usage != nil {
-			if h, ok := s.Usage.Headroom(e.Models); ok {
+			if h, ok := s.Usage.Headroom(e.models); ok {
 				head[strconv.Itoa(s.Slot)] = &h
 			}
 		}
@@ -394,7 +398,7 @@ func (e *Engine) earliestRecovery(active *switcher.Snapshot, activeH *float64, c
 		if u == nil || h == nil || *h > 0 {
 			return
 		}
-		if r := u.LatestExhaustedReset(e.Models); r > 0 && (best == 0 || r < best) {
+		if r := u.LatestExhaustedReset(e.models); r > 0 && (best == 0 || r < best) {
 			best = r
 		}
 	}
@@ -498,7 +502,7 @@ func (e *Engine) commitSwitch(trigger string, active *switcher.Snapshot, activeH
 	st.LeftHeadroom = activeH
 	st.LeftRecoveryAt = nil
 	if active.Usage != nil {
-		if r := active.Usage.EarliestFutureReset(e.Models, now); r > 0 {
+		if r := active.Usage.EarliestFutureReset(e.models, now); r > 0 {
 			f := float64(r)
 			st.LeftRecoveryAt = &f
 		}
@@ -606,7 +610,7 @@ func (e *Engine) emitPoll(active *switcher.Snapshot, snaps []switcher.Snapshot, 
 		key := strconv.Itoa(s.Slot)
 		if s.Usage != nil {
 			wm := map[string]float64{}
-			for _, w := range s.Usage.RelevantWindows(e.Models) {
+			for _, w := range s.Usage.RelevantWindows(e.models) {
 				wm[w.Name] = w.Pct
 			}
 			if len(wm) > 0 {

@@ -30,6 +30,38 @@ func TestHeadroomAndRelevantWindows(t *testing.T) {
 	}
 }
 
+func TestRelevantWindowsSelectorMatching(t *testing.T) {
+	u := &Usage{
+		Scoped: []Window{{Name: "Fable", Pct: 88}, {Name: "Opus", Pct: 10}, {Name: "Mythos", Pct: 5}},
+	}
+	cases := []struct {
+		entry string
+		want  []string
+	}{
+		{"Fable", []string{"Fable"}},              // exact name
+		{"claude-fable-5", []string{"Fable"}},     // full model ID
+		{"claude-fable-5[1m]", []string{"Fable"}}, // suffixed selector
+		{"opusplan", []string{"Opus"}},            // alias containing the family
+		{"claude-mythos-5", []string{"Mythos"}},   // unknown-to-cswap family still matches
+		{"claude-sonnet-4-6", nil},                // no scoped window for it
+	}
+	for _, c := range cases {
+		var got []string
+		for _, w := range u.RelevantWindows([]string{c.entry}) {
+			got = append(got, w.Name)
+		}
+		if len(got) != len(c.want) {
+			t.Errorf("RelevantWindows(%q) = %v, want %v", c.entry, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("RelevantWindows(%q) = %v, want %v", c.entry, got, c.want)
+			}
+		}
+	}
+}
+
 func TestFailureBackoff(t *testing.T) {
 	cases := []struct {
 		failures    int

@@ -34,7 +34,9 @@ internal/
   autoswitch/            # The `cswap auto` loop: usage polling, rotation decisions, and the
                          # cooldown/hysteresis/quarantine state in autoswitch_state.json
   claudecfg/             # Reads/edits ~/.claude.json. ONLY oauthAccount is account-specific;
-                         # every other key is machine state and must survive a switch
+                         # every other key is machine state and must survive a switch.
+                         # Also reads ~/.claude/settings.json (read-only) to detect the
+                         # model Claude Code is using, for autoswitch.model=auto
   cmd/                   # One struct per CLI command + shared helpers (flag parsing, JSON envelopes)
   credentials/           # Live Claude Code credential (Keychain on macOS, file elsewhere) and
                          # cswap's per-account backups (Keychain-primary, base64 .enc fallback)

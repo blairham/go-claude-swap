@@ -78,6 +78,12 @@ func CredentialsFilePath() string {
 	return filepath.Join(ConfigHome(), ".credentials.json")
 }
 
+// ClaudeSettingsPath is Claude Code's user-level settings file, where the
+// selected model is recorded: <config_home>/settings.json.
+func ClaudeSettingsPath() string {
+	return filepath.Join(ConfigHome(), "settings.json")
+}
+
 // BackupRoot is cswap's data directory. Linux/WSL follow XDG; macOS and
 // Windows use the legacy ~/.claude-swap-backup layout.
 func BackupRoot() string {

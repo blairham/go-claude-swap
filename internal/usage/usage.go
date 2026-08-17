@@ -195,8 +195,12 @@ func FetchProfile(client *http.Client, accessToken string) *oauth.Identity {
 }
 
 // RelevantWindows yields the decision-relevant windows: always 5h and 7d,
-// plus scoped weekly windows matching the configured model names
-// (case-insensitive; "all" matches every scoped window). Spend is excluded.
+// plus scoped weekly windows matching the configured model list. A window
+// matches a list entry when the entry equals its display name or contains it
+// (case-insensitive) — so a bare name ("Fable"), a full model ID
+// ("claude-fable-5"), a suffixed selector ("claude-fable-5[1m]"), and an
+// alias like "opusplan" all match, without a per-family mapping table.
+// "all" matches every scoped window. Spend is excluded.
 func (u *Usage) RelevantWindows(models []string) []Window {
 	var out []Window
 	if u.FiveHour != nil {
@@ -207,13 +211,19 @@ func (u *Usage) RelevantWindows(models []string) []Window {
 	}
 	for _, s := range u.Scoped {
 		for _, m := range models {
-			if strings.EqualFold(m, "all") || strings.EqualFold(m, s.Name) {
+			if strings.EqualFold(m, "all") || matchesModel(m, s.Name) {
 				out = append(out, s)
 				break
 			}
 		}
 	}
 	return out
+}
+
+// matchesModel reports whether a configured model entry selects the scoped
+// window with the given display name.
+func matchesModel(entry, windowName string) bool {
+	return strings.Contains(strings.ToLower(entry), strings.ToLower(windowName))
 }
 
 // Headroom is 100 − max(relevant window pcts); (0, false) when no window

@@ -147,11 +147,11 @@ func (s *Settings) ResolvedModels() []string {
 }
 
 // ResolveModelNames expands sentinels in a parsed model list: "auto" becomes
-// the model Claude Code is currently configured to use (dropped when that is
-// undetectable or has no per-model window), and "none" is discarded, so
-// "none" alone disables model windows. Real names pass through. Resolve at
-// decision time, not once at startup — the model can change while a service
-// runs.
+// the model selector Claude Code is currently configured to use (dropped
+// when undetectable), and "none" is discarded, so "none" alone disables
+// model windows. Names and selectors pass through — window matching handles
+// full IDs and aliases (see usage.RelevantWindows). Resolve at decision
+// time, not once at startup — the model can change while a service runs.
 func ResolveModelNames(models []string) []string {
 	var out []string
 	seen := map[string]bool{}
@@ -166,7 +166,7 @@ func ResolveModelNames(models []string) []string {
 		switch strings.ToLower(m) {
 		case "none":
 		case "auto":
-			add(claudecfg.ActiveModelWindow())
+			add(claudecfg.ActiveModel())
 		default:
 			add(m)
 		}

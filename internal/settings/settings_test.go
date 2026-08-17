@@ -110,15 +110,15 @@ func TestResolveModelNames(t *testing.T) {
 		t.Errorf("none: got %v, want nil", got)
 	}
 
-	// "auto" expands to Claude Code's configured model, deduped against
-	// an explicit spelling of the same name.
+	// "auto" expands to Claude Code's configured model selector verbatim
+	// (window matching handles IDs and suffixes), deduped case-insensitively.
 	settingsPath := filepath.Join(dir, "settings.json")
 	if err := os.WriteFile(settingsPath, []byte(`{"model": "claude-fable-5[1m]"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got = ResolveModelNames([]string{"auto", "fable", "Opus"})
-	if len(got) != 2 || got[0] != "Fable" || got[1] != "Opus" {
-		t.Errorf("auto detected: got %v, want [Fable Opus]", got)
+	got = ResolveModelNames([]string{"auto", "CLAUDE-FABLE-5[1m]", "Opus"})
+	if len(got) != 2 || got[0] != "claude-fable-5[1m]" || got[1] != "Opus" {
+		t.Errorf("auto detected: got %v, want [claude-fable-5[1m] Opus]", got)
 	}
 }
 

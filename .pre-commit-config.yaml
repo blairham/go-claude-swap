@@ -41,18 +41,27 @@ repos:
     rev: v2.12.2
     hooks:
       - id: golangci-lint-fmt
-
       # The diff-scoped hook (`--new-from-rev HEAD`), deliberately: this runs on
-
       # every commit and should report what you just wrote, not the
-
-      # repository's whole backlog. CI lints the change against its base.
-
+      # repository's whole backlog.
       #
-
       # Keep `rev` in lockstep with go.mod's tool pin.
-
       - id: golangci-lint
+
+      # The same upstream hook, told which base to diff against.
+      # `--new-from-merge-base` overrides the entry's `--new-from-rev HEAD`
+      # (measured), which is the whole reason this works on a clean checkout,
+      # where the tree and HEAD are identical so the entry finds nothing.
+      #
+      # `stages: [manual]` keeps it out of every local commit, where the hook
+      # above already reports what you are about to write and `--fix` corrects
+      # it. CI asks for this one by name.
+      - id: golangci-lint
+        alias: golangci-lint-new
+        name: golangci-lint (issues this change introduces)
+        stages: [manual]
+        args: [--new-from-merge-base=origin/main]
+
   # Secret scanning
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1
@@ -60,5 +69,7 @@ repos:
       - id: gitleaks
         exclude: ^build/
 
-# Note: the whole-repo golangci-lint run stays in CI — the hook above only
-# lints what changed since HEAD, which is fast enough for every commit.
+# Note: CI runs the `golangci-lint-new` alias above at the manual stage, so a
+# pull request is gated on the issues it introduces. Nothing runs the whole
+# repository; whole-module linters like `unused` are reported only for code
+# the change touched.

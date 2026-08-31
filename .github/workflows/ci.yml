@@ -36,16 +36,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
+      with:
+        # `--new-from-merge-base` needs the base branch's history to find the
+        # common ancestor; a shallow clone has none of it.
+        fetch-depth: 0
     - uses: actions/setup-go@v6
       with:
         go-version-file: go.mod
         check-latest: true
         cache: true # go-mod-tidy-repo resolves the whole graph; uncached it is slow and flaky
     - name: Run pre-commit hooks
-      # Nothing is skipped: pre-commit is the linter. `golangci-lint` reports
-      # what the change introduced, which is the whole point of running it
-      # here rather than in a job of its own.
+      # `golangci-lint` is `--new-from-rev HEAD`, which compares the working
+      # tree against HEAD — right locally, and nothing at all on a clean
+      # checkout. Skipped here; the steps below ask the same hook the
+      # question it can answer on a runner.
+      env:
+        SKIP: golangci-lint
       uses: blairham/go-pre-commit@v4.6.6
+    - name: Assert the lint base is present
+      # A base ref that does not resolve makes golangci-lint print `0 issues`
+      # and exit 0 — measured. Without this, losing `fetch-depth: 0` above
+      # would turn the lint below into a silent pass, which is the failure
+      # this whole change exists to end.
+      run: git rev-parse --verify origin/main >/dev/null
+    - name: Lint what this change introduces
+      # Same config, same pin, same hook — asked the narrower question:
+      # only what this change introduced, not the repository's backlog.
+      uses: blairham/go-pre-commit@v4.6.6
+      with:
+        extra_args: --hook-stage manual golangci-lint-new --all-files
 
   # Gating happens inside the jobs, never with a workflow-level `paths:`
   # filter: a required check that never runs reports as *pending forever*

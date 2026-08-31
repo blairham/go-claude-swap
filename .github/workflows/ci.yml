@@ -45,26 +45,55 @@ jobs:
         go-version-file: go.mod
         check-latest: true
         cache: true # go-mod-tidy-repo resolves the whole graph; uncached it is slow and flaky
+    - name: Resolve the diff this change introduces
+      # Everything below runs against this range and nothing else — no
+      # `--all-files` anywhere in CI. A branch create or a force-push sends an
+      # all-zero `before`, and an unresolvable ref makes both pre-commit and
+      # golangci-lint report nothing while exiting 0, which is the silent pass
+      # this whole job exists to prevent. So: fall back to the merge base with
+      # main, then verify every ref actually resolves and fail loudly if not.
+      id: range
+      env:
+        BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      run: |
+        set -euo pipefail
+        base="$BASE"
+        if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+           || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+          echo "No usable base ref ('${base:-empty}') — falling back to the merge base with main"
+          base="$(git merge-base origin/main "$HEAD_SHA")"
+        fi
+        git rev-parse --verify "${base}^{commit}" >/dev/null
+        git rev-parse --verify "${HEAD_SHA}^{commit}" >/dev/null
+        # The manual hook below diffs against origin/main; if that is missing
+        # it reports `0 issues` and exits 0 rather than erroring.
+        git rev-parse --verify origin/main >/dev/null
+        echo "base=$base" >> "$GITHUB_OUTPUT"
+        echo "head=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+        echo "Linting ${base}..${HEAD_SHA}"
     - name: Run pre-commit hooks
-      # `golangci-lint` is `--new-from-rev HEAD`, which compares the working
-      # tree against HEAD — right locally, and nothing at all on a clean
-      # checkout. Skipped here; the steps below ask the same hook the
-      # question it can answer on a runner.
+      # Scoped to this change's diff, never `--all-files`: CI's job is to
+      # report what this change did, not to replay the repository's backlog.
+      #
+      # `golangci-lint` is skipped because it is `--new-from-rev HEAD`, which
+      # compares the working tree against HEAD and so reports nothing at all on
+      # a clean checkout. Diff-scoping this run cannot rescue it — the hook is
+      # `pass_filenames: false`, so it never sees the file list. The step below
+      # asks the same hook the question it can answer on a runner.
       env:
         SKIP: golangci-lint
       uses: blairham/go-pre-commit@v4.6.6
-    - name: Assert the lint base is present
-      # A base ref that does not resolve makes golangci-lint print `0 issues`
-      # and exit 0 — measured. Without this, losing `fetch-depth: 0` above
-      # would turn the lint below into a silent pass, which is the failure
-      # this whole change exists to end.
-      run: git rev-parse --verify origin/main >/dev/null
+      with:
+        extra_args: --from-ref ${{ steps.range.outputs.base }} --to-ref ${{ steps.range.outputs.head }} --show-diff-on-failure
     - name: Lint what this change introduces
-      # Same config, same pin, same hook — asked the narrower question:
-      # only what this change introduced, not the repository's backlog.
+      # Same config, same pin, same hook — asked the narrower question, and
+      # told not to fix (`--fix=false` in the hook's args): a linter that
+      # repairs its own findings exits 0 and reports nothing, which is a green
+      # check over unchanged, still-broken committed code.
       uses: blairham/go-pre-commit@v4.6.6
       with:
-        extra_args: --hook-stage manual golangci-lint-new --all-files
+        extra_args: --from-ref ${{ steps.range.outputs.base }} --to-ref ${{ steps.range.outputs.head }} --hook-stage manual golangci-lint-new
 
   # Gating happens inside the jobs, never with a workflow-level `paths:`
   # filter: a required check that never runs reports as *pending forever*

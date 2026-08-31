@@ -48,19 +48,29 @@ repos:
       # Keep `rev` in lockstep with go.mod's tool pin.
       - id: golangci-lint
 
-      # The same upstream hook, told which base to diff against.
-      # `--new-from-merge-base` overrides the entry's `--new-from-rev HEAD`
-      # (measured), which is the whole reason this works on a clean checkout,
-      # where the tree and HEAD are identical so the entry finds nothing.
+      # The same upstream hook, told which base to diff against and told not
+      # to fix. Both flags are appended to the entry, and both override it
+      # (measured):
       #
-      # `stages: [manual]` keeps it out of every local commit, where the hook
-      # above already reports what you are about to write and `--fix` corrects
-      # it. CI asks for this one by name.
+      #   `--new-from-merge-base` beats the entry's `--new-from-rev HEAD`,
+      #   which on a clean checkout compares the tree against an identical
+      #   HEAD and so finds nothing.
+      #
+      #   `--fix=false` beats the entry's `--fix`. This one is not a
+      #   preference. Measured on a committed misspelling: with `--fix`,
+      #   golangci-lint repaired the runner's working copy, printed
+      #   `0 issues` and exited 0 — a green check, nothing reported, and the
+      #   committed code still wrong. Fixing belongs to the hook above, which
+      #   runs against your working tree where the repair is the point. CI
+      #   only reports.
+      #
+      # `stages: [manual]` keeps it out of every local commit. CI asks for
+      # this one by name.
       - id: golangci-lint
         alias: golangci-lint-new
         name: golangci-lint (issues this change introduces)
         stages: [manual]
-        args: [--new-from-merge-base=origin/main]
+        args: [--new-from-merge-base=origin/main, --fix=false]
 
   # Secret scanning
   - repo: https://github.com/gitleaks/gitleaks

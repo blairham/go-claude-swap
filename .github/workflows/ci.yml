@@ -44,14 +44,9 @@ jobs:
         check-latest: true
         cache: true # go-mod-tidy-repo resolves the whole graph; uncached it is slow and flaky
     - name: Run pre-commit hooks
-      # `golangci-lint` is skipped, and only that one. Its `--new-from-rev HEAD`
-      # compares the working tree against HEAD, and a CI checkout is clean — so
-      # it reports nothing at all here while looking configured. The Lint job
-      # below does the equivalent properly, against the base commit.
-      # `golangci-lint-fmt` is NOT skipped: formatting is absolute, not relative
-      # to a diff, and it is the same second of work.
-      env:
-        SKIP: golangci-lint
+      # Nothing is skipped: pre-commit is the linter. `golangci-lint` reports
+      # what the change introduced, which is the whole point of running it
+      # here rather than in a job of its own.
       uses: blairham/go-pre-commit@v4.6.6
 
   # Gating happens inside the jobs, never with a workflow-level `paths:`
@@ -141,42 +136,6 @@ jobs:
         cache: true
     - run: make build
 
-  # "Only the changes", done in a way that works on a runner. The hook's
-  # `--new-from-rev HEAD` is a no-op against a clean checkout, so this diffs
-  # from the base *commit*: the pull request's base sha, or on a merge the
-  # commit main pointed at. `origin/<base_ref>` is deliberately not used —
-  # actions/checkout does not reliably leave that ref behind.
-  #
-  # `go vet` is not run separately: govet is one of the linters .golangci.yml
-  # enables, so this job already does it over the same code.
-  lint:
-    name: Lint
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v6
-      with:
-        fetch-depth: 0 # --new-from-rev needs the base commit, not just HEAD
-    - uses: actions/setup-go@v6
-      with:
-        go-version-file: go.mod
-        check-latest: true
-        cache: true
-    - name: Lint what this change introduced
-      env:
-        BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-      run: |
-        LINT="go tool golangci-lint"
-        if git cat-file -e "$BASE" 2>/dev/null; then
-          $LINT run --new-from-rev "$BASE"
-        else
-          # No usable base commit, so there is no diff to be relative to.
-          # Lint everything rather than silently lint nothing.
-          echo "base commit $BASE is not present — linting everything"
-          $LINT run
-        fi
-
   # The one check branch protection requires. Requiring the jobs by name does
   # not survive this workflow's shape: a job skipped by the prose guard never
   # reports, and a *matrix* job skipped by `if:` never expands, so a policy
@@ -185,7 +144,7 @@ jobs:
   # renames and new jobs alike — when jobs change here, update this `needs`
   # list and nothing else.
   ci-ok:
-    needs: [pre-commit, changes, test, build, lint]
+    needs: [pre-commit, changes, test, build]
     if: always()
     runs-on: ubuntu-latest
     steps:

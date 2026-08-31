@@ -42,6 +42,16 @@ repos:
     hooks:
       - id: golangci-lint-fmt
 
+      # The diff-scoped hook (`--new-from-rev HEAD`), deliberately: this runs on
+
+      # every commit and should report what you just wrote, not the
+
+      # repository's whole backlog. CI lints the change against its base.
+
+      #
+
+      # Keep `rev` in lockstep with go.mod's tool pin.
+
       - id: golangci-lint
   # Secret scanning
   - repo: https://github.com/gitleaks/gitleaks

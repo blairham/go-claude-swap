@@ -1,65 +1,171 @@
-name: CI/CD
+name: CI
 
-env:
-  GO_VERSION: "1.26"
-
+# One workflow holds everything that gates a merge, so there is one file to
+# read and one check to require. Splitting pre-commit or tests into their own
+# workflow bought nothing and cost a second place to keep in sync.
 on:
-  push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
+    # `synchronize` is every push to a branch with an open pull request, which
+    # is the feedback that matters. Drafts get pre-commit and nothing else:
+    # push freely while drafting, and `ready_for_review` starts the rest.
+    types: [opened, reopened, synchronize, ready_for_review]
+  push:
+    # Only the pre-commit job runs here — see its `if:`. Tests are deliberately
+    # not re-run after a merge: branch protection requires the branch to be up
+    # to date, so for a squash merge the tree that lands on main is the tree
+    # that was already tested, and running it again proves nothing while
+    # delaying the next merge.
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  # A superseded push is not worth finishing; only the newest commit matters.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  # Runs for every commit that reaches GitHub — every push to a pull request,
+  # draft or not, and every push to main. It is the only job that looks at
+  # *every* file rather than at Go: trailing whitespace, licence headers,
+  # secrets, the toolchain pin. None of that is worth detecting changes for,
+  # and a secret committed to a draft is committed.
+  pre-commit:
+    name: Pre-commit
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        check-latest: true # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
+    - name: Cache the hook environments
+      # pre-commit builds an environment for a hook even when SKIP tells it not
+      # to run one, which cost two and a half minutes a build to install a
+      # linter this job then declines to use.
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pre-commit
+        key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+    - name: Run pre-commit hooks
+      # Not the golangci-lint ones. The Lint job runs the same tool over the
+      # whole repository rather than over the diff, and `golangci-lint run`
+      # reports formatter findings too, so both hooks are a strict subset of a
+      # job that already has to pass.
+      env:
+        SKIP: golangci-lint,golangci-lint-fmt
+      uses: blairham/go-pre-commit@v4.6.6
+
+  # Gating happens inside the jobs, never with a workflow-level `paths:`
+  # filter: a required check that never runs reports as *pending forever*
+  # rather than as passed, which makes a docs-only pull request unmergeable.
+  # Anything unrecognised counts as code, so when this is wrong it is wrong in
+  # the direction of running the tests.
+  # Only after the cheap universal checks have passed is it worth asking the
+  # expensive question, so this waits on pre-commit.
+  changes:
+    name: Detect changed files
+    needs: pre-commit
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0 # the diff needs the base commit, not just HEAD
+    - id: filter
+      name: Is any of this code?
+      run: |
+        code=false
+        while IFS= read -r f; do
+          [ -n "$f" ] || continue
+          case "$f" in
+            docs/*|*.md|LICENSE|LICENSE.*|*.png|*.jpg|*.gif|*.svg) ;; # prose
+            *) code=true; break ;;
+          esac
+        done <<<"$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)"
+        echo "code=$code" >> "$GITHUB_OUTPUT"
+        echo "changed files are $([ "$code" = true ] && echo 'code — full run' || echo 'prose only — skipping the code jobs')"
+
   test:
+    name: Build and test
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ ubuntu-latest, macos-latest ]
+        os: [ubuntu-latest, macos-latest]
     steps:
     - uses: actions/checkout@v6
-
-    - name: Set up Go
-      uses: actions/setup-go@v6
+    - uses: actions/setup-go@v6
       with:
-        go-version: ${{ env.GO_VERSION }}
-        check-latest: true # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
+        go-version-file: go.mod
+        check-latest: true
         cache: true
+    - run: make test
 
-    - name: Run tests
-      run: make test
-
+  # `go vet` is not run separately: govet is one of the linters .golangci.yml
+  # enables, so this job already does it, over the same code, with the same
+  # analysers. `go tool` rather than golangci-lint-action, so the version CI
+  # runs is the one pinned in go.mod — the same one `make lint` runs locally.
+  # The action's own `version:` was a second pin that drifted from it.
   lint:
+    name: Lint
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
-
-    - name: Set up Go
-      uses: actions/setup-go@v6
+    - uses: actions/setup-go@v6
       with:
-        go-version: ${{ env.GO_VERSION }}
-        check-latest: true # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
+        go-version-file: go.mod
+        check-latest: true
         cache: true
+    - run: go tool golangci-lint run
 
-    - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v9
-      with:
-        version: latest
-        args: --timeout=10m
-
+  # No `if:` needed: a job that `needs` a skipped job is itself skipped, so
+  # the prose guard reaches this one through test and lint.
   build:
+    name: Build
+    needs: [test, lint]
     runs-on: ubuntu-latest
-    needs: [ test, lint ]
     steps:
     - uses: actions/checkout@v6
       with:
         fetch-depth: 0
-
-    - name: Set up Go
-      uses: actions/setup-go@v6
+    - uses: actions/setup-go@v6
       with:
-        go-version: ${{ env.GO_VERSION }}
-        check-latest: true # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
+        go-version-file: go.mod
+        check-latest: true
         cache: true
+    - run: make build
 
-    - name: Build
-      run: make build
+  # The one check branch protection requires. Requiring the jobs by name does
+  # not survive this workflow's shape: a job skipped by the prose guard never
+  # reports, and a *matrix* job skipped by `if:` never expands, so a policy
+  # naming "test (ubuntu-latest)" waits for it forever. A single always-running
+  # gate that fails when any upstream job failed survives skips, matrix
+  # renames and new jobs alike — when jobs change here, update this `needs`
+  # list and nothing else.
+  ci-ok:
+    name: CI OK
+    needs: [pre-commit, changes, test, lint, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Verify no required job failed
+      env:
+        RESULTS: ${{ toJSON(needs) }}
+      run: |
+        echo "$RESULTS"
+        bad=$(echo "$RESULTS" | jq -r 'to_entries[]
+          | select(.value.result != "success" and .value.result != "skipped")
+          | "\(.key)=\(.value.result)"')
+        if [ -n "$bad" ]; then
+          echo "not ok: $bad"
+          exit 1
+        fi
+        echo "ok"

@@ -10,20 +10,21 @@ on:
     # push freely while drafting, and `ready_for_review` starts the rest.
     types: [opened, reopened, synchronize, ready_for_review]
   push:
-    # Only the pre-commit job runs here — see its `if:`. Tests are deliberately
-    # not re-run after a merge: branch protection requires the branch to be up
-    # to date, so for a squash merge the tree that lands on main is the tree
-    # that was already tested, and running it again proves nothing while
-    # delaying the next merge.
+    # Everything runs here too, not just pre-commit. A squash merge lands a
+    # tree no pull request ever built — the branch was tested before the
+    # squash, and `main` may have moved under it since — so the merge result
+    # gets its own run rather than inheriting the branch's green tick.
     branches: [main]
 
 permissions:
   contents: read
 
 concurrency:
-  # A superseded push is not worth finishing; only the newest commit matters.
+  # A superseded push to a pull request is not worth finishing. A push to main
+  # is: it is the record of whether that merge was good, and cancelling it
+  # leaves the question unanswered.
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Runs for every commit that reaches GitHub — every push to a pull request,
@@ -68,7 +69,8 @@ jobs:
   changes:
     name: Detect changed files
     needs: pre-commit
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    # Drafts still skip the code jobs; a push to main never does.
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
@@ -79,7 +81,9 @@ jobs:
     - id: filter
       name: Is any of this code?
       env:
-        BASE: ${{ github.event.pull_request.base.sha }}
+        # On a merge to main there is no pull request; `before` is the commit
+        # main pointed at, which makes the diff the merge itself.
+        BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
       run: |
         code=false
         if ! git cat-file -e "$BASE" 2>/dev/null; then

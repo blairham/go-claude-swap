@@ -85,7 +85,7 @@ jobs:
         SKIP: golangci-lint
       uses: blairham/go-pre-commit@v4.6.6
       with:
-        extra_args: --from-ref ${{ steps.range.outputs.base }} --to-ref ${{ steps.range.outputs.head }} --show-diff-on-failure
+        extra_args: --from-ref ${{ steps.range.outputs.base }} --to-ref ${{ steps.range.outputs.head }}
     - name: Lint what this change introduces
       # Same config, same pin, same hook — asked the narrower question, and
       # told not to fix (`--fix=false` in the hook's args): a linter that

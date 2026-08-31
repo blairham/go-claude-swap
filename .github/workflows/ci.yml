@@ -39,7 +39,8 @@ jobs:
     - uses: actions/setup-go@v6
       with:
         go-version-file: go.mod
-        check-latest: true # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
+        check-latest: true
+        cache: true # go-mod-tidy-repo resolves the whole graph; an uncached run is slow and flaky # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
     - name: Cache the hook environments
       # pre-commit builds an environment for a hook even when SKIP tells it not
       # to run one, which cost two and a half minutes a build to install a
@@ -77,15 +78,26 @@ jobs:
         fetch-depth: 0 # the diff needs the base commit, not just HEAD
     - id: filter
       name: Is any of this code?
+      env:
+        BASE: ${{ github.event.pull_request.base.sha }}
       run: |
         code=false
-        while IFS= read -r f; do
-          [ -n "$f" ] || continue
-          case "$f" in
-            docs/*|*.md|LICENSE|LICENSE.*|*.png|*.jpg|*.gif|*.svg) ;; # prose
-            *) code=true; break ;;
-          esac
-        done <<<"$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)"
+        if ! git cat-file -e "$BASE" 2>/dev/null; then
+          # No usable base commit — a force push, or a shallow fetch that did
+          # not reach it. `git diff` would fail here and print nothing, and an
+          # empty diff is indistinguishable from "only prose changed", so this
+          # would silently skip every test. The safe answer is to run them.
+          echo "base commit $BASE is not present — running everything"
+          code=true
+        else
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            case "$f" in
+              docs/*|*.md|LICENSE|LICENSE.*|*.png|*.jpg|*.gif|*.svg) ;; # prose
+              *) code=true; break ;;
+            esac
+          done <<<"$(git diff --name-only "$BASE"...HEAD)"
+        fi
         echo "code=$code" >> "$GITHUB_OUTPUT"
         echo "changed files are $([ "$code" = true ] && echo 'code — full run' || echo 'prose only — skipping the code jobs')"
 

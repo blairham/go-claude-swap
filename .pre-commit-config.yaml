@@ -57,12 +57,21 @@ repos:
       #   HEAD and so finds nothing.
       #
       #   `--fix=false` beats the entry's `--fix`. This one is not a
-      #   preference. Measured on a committed misspelling: with `--fix`,
-      #   golangci-lint repaired the runner's working copy, printed
-      #   `0 issues` and exited 0 — a green check, nothing reported, and the
-      #   committed code still wrong. Fixing belongs to the hook above, which
-      #   runs against your working tree where the repair is the point. CI
-      #   only reports.
+      #   preference. Measured on a committed misspelling: with `--fix`, the
+      #   hook reported **Passed** while rewriting the runner's working copy,
+      #   because a linter that repairs its own findings has nothing left to
+      #   report. Green check, no output, committed code still wrong.
+      #
+      #   And pre-commit's usual safety net does not cover it. A fixing hook
+      #   normally fails with "files were modified by this hook" — that is why
+      #   end-of-file-fixer and friends stay honest in CI. But that check works
+      #   from the filenames pre-commit handed the hook, and this one is
+      #   `pass_filenames: false`, so there are none to compare. Measured both
+      #   ways: end-of-file-fixer failed on a file it fixed; golangci-lint
+      #   passed on one it fixed. That is what makes this hook the exception.
+      #
+      #   Fixing belongs to the hook above, which runs against your working
+      #   tree where the repair is the point. CI only reports.
       #
       # `stages: [manual]` keeps it out of every local commit. CI asks for
       # this one by name.

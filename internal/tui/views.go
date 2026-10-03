@@ -89,8 +89,25 @@ func (m model) renderMenu() string {
 func (m model) switchView() string {
 	title := lipgloss.NewStyle().Foreground(m.pal.Fg).Bold(true).Render("switch to which account?")
 	body := m.cardList(true)
-	foot := m.footer("enter switch · j/k move · esc back")
+	hints := "enter switch · d remove · j/k move · esc back"
+	if m.confirmRemove != 0 {
+		hints = m.removePrompt()
+	}
+	foot := m.footer(hints)
 	return title + "\n\n" + body + "\n" + foot
+}
+
+// removePrompt asks to confirm removing the pending slot.
+func (m model) removePrompt() string {
+	email := ""
+	for i := range m.snaps {
+		if m.snaps[i].Slot == m.confirmRemove && m.snaps[i].Account != nil {
+			email = " (" + m.snaps[i].Account.Email + ")"
+			break
+		}
+	}
+	return lipgloss.NewStyle().Foreground(m.pal.Accent).Bold(true).
+		Render(fmt.Sprintf("Remove Account-%d%s and delete its stored credentials? y/N", m.confirmRemove, email))
 }
 
 // watchView: read-only full cards; s arms selection mode.

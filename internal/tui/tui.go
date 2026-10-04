@@ -5,6 +5,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -52,6 +53,13 @@ type pollTickMsg time.Time
 // frameTickMsg fires the 1s re-render cadence for countdowns.
 type frameTickMsg time.Time
 
+// removeDoneMsg carries a completed account removal.
+type removeDoneMsg struct {
+	slot  int
+	email string
+	err   error
+}
+
 // switchDoneMsg carries a completed switch attempt.
 type switchDoneMsg struct {
 	res *switcher.Result
@@ -89,9 +97,11 @@ type model struct {
 	collecting bool // a Collect is in flight
 	busy       bool // a mutating action (switch) is in flight
 
-	cursor  int  // card cursor on switch/watch screens
-	armed   bool // watch: selection mode engaged
-	menuIdx int  // dashboard menu cursor
+	cursor int  // card cursor on switch/watch screens
+	armed  bool // watch: selection mode engaged
+	// confirmRemove is the slot awaiting a y/N removal answer (0 when none).
+	confirmRemove int
+	menuIdx       int // dashboard menu cursor
 
 	toast   string
 	toastAt time.Time
@@ -180,6 +190,14 @@ func collectCmd(storeOnly bool, models []string) tea.Cmd {
 		}
 		c := &switcher.Collector{StoreOnly: storeOnly, Models: models}
 		return snapshotMsg{snaps: c.Collect(seq), at: time.Now()}
+	}
+}
+
+// removeCmd deletes an account off the UI goroutine.
+func removeCmd(slot int) tea.Cmd {
+	return func() tea.Msg {
+		got, email, err := switcher.Remove(strconv.Itoa(slot))
+		return removeDoneMsg{slot: got, email: email, err: err}
 	}
 }
 
@@ -273,6 +291,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case switchDoneMsg:
 		return m.finishSwitch(msg)
 
+	case removeDoneMsg:
+		return m.finishRemove(msg)
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -305,8 +326,40 @@ func (m model) finishSwitch(msg switchDoneMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// finishRemove clears the busy flag, toasts the outcome, and refreshes.
+func (m model) finishRemove(msg removeDoneMsg) (tea.Model, tea.Cmd) {
+	m.busy = false
+	if msg.err != nil {
+		m.setToast("Remove failed: " + msg.err.Error())
+	} else {
+		m.setToast(fmt.Sprintf("Removed Account-%d (%s)", msg.slot, msg.email))
+	}
+	var cmd tea.Cmd
+	if !m.collecting {
+		m.collecting = true
+		cmd = collectCmd(true, m.models)
+	}
+	return m, cmd
+}
+
 // handleKey routes keys: global bindings first, then the active screen's.
+// A pending removal confirmation swallows the next key: y removes, anything
+// else cancels.
 func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.confirmRemove != 0 {
+		slot := m.confirmRemove
+		m.confirmRemove = 0
+		if msg.String() != "y" && msg.String() != "Y" {
+			m.setToast("Remove canceled")
+			return m, nil
+		}
+		if m.busy {
+			m.setToast("Another action is still running")
+			return m, nil
+		}
+		m.busy = true
+		return m, removeCmd(slot)
+	}
 	switch msg.String() {
 	case "ctrl+c":
 		return m, tea.Quit
@@ -371,6 +424,8 @@ func (m model) handleSwitchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = m.moveCursor(-1)
 	case "enter":
 		return m.startSwitch(false)
+	case "d":
+		return m.askRemove(), nil
 	}
 	return m, nil
 }
@@ -433,6 +488,19 @@ func (m model) startSwitch(stayWatching bool) (tea.Model, tea.Cmd) {
 		m.armed = false
 	}
 	return m, switchCmd(slot)
+}
+
+// askRemove arms the y/N confirmation for removing the cursored account.
+func (m model) askRemove() model {
+	if m.busy {
+		m.setToast("Another action is still running")
+		return m
+	}
+	if len(m.snaps) == 0 {
+		return m
+	}
+	m.confirmRemove = m.snaps[m.cursor].Slot
+	return m
 }
 
 // cycleTheme advances dark → light → auto, persists best-effort, toasts.

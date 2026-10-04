@@ -66,7 +66,7 @@ cswap service install         # any install: launchd (macOS) / systemd --user (L
 | `cswap switch [N\|alias\|email] [--force]` | Switch accounts (bare = rotate) |
 | `cswap auto [--once] [--dry-run] [--json]` | Auto-switch when the binding window hits the threshold |
 | `cswap service install\|uninstall\|status` | Run `cswap auto` as an always-on login service |
-| `cswap tui` / `cswap watch` | Interactive dashboard / live watch view |
+| `cswap tui` / `cswap watch` | Interactive dashboard / live watch view (switch screen: `d` removes an account, after a y/N confirm) |
 | `cswap remove` / `disable` / `enable` / `alias` / `move` | Roster management |
 | `cswap export` / `import` | Back up or migrate accounts between machines |
 | `cswap config [list\|get\|set\|unset\|path]` | Settings (threshold, strategy, cooldown, theme, …) |

@@ -41,18 +41,46 @@ repos:
     rev: v2.12.2
     hooks:
       - id: golangci-lint-fmt
-
       # The diff-scoped hook (`--new-from-rev HEAD`), deliberately: this runs on
-
       # every commit and should report what you just wrote, not the
-
-      # repository's whole backlog. CI lints the change against its base.
-
+      # repository's whole backlog.
       #
-
       # Keep `rev` in lockstep with go.mod's tool pin.
-
       - id: golangci-lint
+
+      # The same upstream hook, told which base to diff against and told not
+      # to fix. Both flags are appended to the entry, and both override it
+      # (measured):
+      #
+      #   `--new-from-merge-base` beats the entry's `--new-from-rev HEAD`,
+      #   which on a clean checkout compares the tree against an identical
+      #   HEAD and so finds nothing.
+      #
+      #   `--fix=false` beats the entry's `--fix`. This one is not a
+      #   preference. Measured on a committed misspelling: with `--fix`, the
+      #   hook reported **Passed** while rewriting the runner's working copy,
+      #   because a linter that repairs its own findings has nothing left to
+      #   report. Green check, no output, committed code still wrong.
+      #
+      #   And pre-commit's usual safety net does not cover it. A fixing hook
+      #   normally fails with "files were modified by this hook" — that is why
+      #   end-of-file-fixer and friends stay honest in CI. But that check works
+      #   from the filenames pre-commit handed the hook, and this one is
+      #   `pass_filenames: false`, so there are none to compare. Measured both
+      #   ways: end-of-file-fixer failed on a file it fixed; golangci-lint
+      #   passed on one it fixed. That is what makes this hook the exception.
+      #
+      #   Fixing belongs to the hook above, which runs against your working
+      #   tree where the repair is the point. CI only reports.
+      #
+      # `stages: [manual]` keeps it out of every local commit. CI asks for
+      # this one by name.
+      - id: golangci-lint
+        alias: golangci-lint-new
+        name: golangci-lint (issues this change introduces)
+        stages: [manual]
+        args: [--new-from-merge-base=origin/main, --fix=false]
+
   # Secret scanning
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1
@@ -60,5 +88,7 @@ repos:
       - id: gitleaks
         exclude: ^build/
 
-# Note: the whole-repo golangci-lint run stays in CI — the hook above only
-# lints what changed since HEAD, which is fast enough for every commit.
+# Note: CI runs the `golangci-lint-new` alias above at the manual stage, so a
+# pull request is gated on the issues it introduces. Nothing runs the whole
+# repository; whole-module linters like `unused` are reported only for code
+# the change touched.

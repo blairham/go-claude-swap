@@ -83,7 +83,7 @@ jobs:
       # asks the same hook the question it can answer on a runner.
       env:
         SKIP: golangci-lint
-      uses: blairham/go-pre-commit@v4.6.6
+      uses: blairham/go-pre-commit@b3deb289b038678e3b5af79e1442f71fc0f8a28c # v4.6.16
       with:
         extra_args: --from-ref ${{ steps.range.outputs.base }} --to-ref ${{ steps.range.outputs.head }}
     - name: Lint what this change introduces
@@ -91,7 +91,7 @@ jobs:
       # told not to fix (`--fix=false` in the hook's args): a linter that
       # repairs its own findings exits 0 and reports nothing, which is a green
       # check over unchanged, still-broken committed code.
-      uses: blairham/go-pre-commit@v4.6.6
+      uses: blairham/go-pre-commit@b3deb289b038678e3b5af79e1442f71fc0f8a28c # v4.6.16
       with:
         extra_args: --from-ref ${{ steps.range.outputs.base }} --to-ref ${{ steps.range.outputs.head }} --hook-stage manual golangci-lint-new
 

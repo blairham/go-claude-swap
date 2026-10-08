@@ -17,8 +17,7 @@ make test       # Run tests with race detector: go test -v -race ./...
 make test-cover # Tests + coverage.html
 make fmt        # Format: go tool gofumpt -w .
 make vet        # go vet ./...
-make lint       # go tool golangci-lint run ./...
-make check      # fmt + vet + test  (note: does NOT run lint — run `make lint` separately before a PR)
+make check      # fmt + vet + test  (no lint target: golangci-lint runs as a pre-commit hook and in CI)
 make tidy       # go mod tidy
 make sync       # Rewrite .tool-versions' golang pin from go.mod
 make check-versions  # Assert go.mod ↔ .tool-versions agree (runs the pre-commit hook)
@@ -79,7 +78,7 @@ The invariants below are the reason most of this code is shaped the way it is. R
 
 ## CI/CD
 
-- **ci.yml**: `test` (ubuntu + macos matrix, `make test`), `lint` (golangci-lint-action), then `build` — on push to main and PRs
+- **ci.yml**: `pre-commit` (the hooks plus `golangci-lint-new` over the change's diff), `test` (ubuntu + macos matrix, `make test`), then `build` — on push to main and PRs
 - **goreleaser.yml**: GoReleaser on version tags (`v*`) or manual dispatch
 - **Pre-commit hooks** (`pre-commit install`): trailing-whitespace, end-of-file-fixer, check-yaml, check-added-large-files, check-merge-conflict, detect-private-key, go-mod-tidy-repo, go-fumpt-repo, `check-go-version-sync` (blairham/pre-commit-hooks), `golangci-lint-fmt` + `golangci-lint`, gitleaks. `golangci-lint-fmt` applies every formatter in `.golangci.yml` (gofumpt + goimports); `golangci-lint` lints only what changed since HEAD. The whole-repo run stays in CI — `--new-from-rev` can't see whole-module linters like `unused`
 

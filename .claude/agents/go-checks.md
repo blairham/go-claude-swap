@@ -2,8 +2,8 @@
 name: go-checks
 description: >-
   Run the go-claude-swap check gate and triage the failures. Use after a batch of
-  edits, before opening a PR, or when `make check` / `make lint` output needs
-  interpreting. Runs gofumpt, go vet, golangci-lint v2, and `go test -race`, then
+  edits, before opening a PR, or when `make check` or golangci-lint hook output
+  needs interpreting. Runs gofumpt, go vet, and `go test -race`, then
   reports what broke and the minimal fix. Read-mostly — it reformats via
   `make fmt` but does not otherwise edit code.
 tools: Bash, Read, Grep, Glob
@@ -15,13 +15,12 @@ You run the check gate for go-claude-swap and report a triaged result.
 ## The gate
 
 ```bash
-make check   # fmt + vet + test  — does NOT include lint
-make lint    # go tool golangci-lint run ./...
+make check   # fmt + vet + test
 ```
 
-Both are needed: this repo's `check` target stops at `test`, and golangci-lint
-runs separately (it is CI-enforced but deliberately out of pre-commit). If the
-caller scoped the request to one target, run only that.
+There is no lint target. golangci-lint runs as a pre-commit hook (on what the
+commit changes) and in CI; never start it by hand. Triage its findings from the
+hook or CI output. If the caller scoped the request to one target, run only that.
 
 `fmt` is `go tool gofumpt -w .`, so it rewrites files in place — always report
 which files it changed, since those need re-staging.

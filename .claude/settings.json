@@ -10,8 +10,7 @@
       "Bash(go tool:*)",
       "Bash(go doc:*)",
       "Bash(gofmt:*)",
-      "Bash(gofumpt:*)",
-      "Bash(golangci-lint:*)"
+      "Bash(gofumpt:*)"
     ]
   }
 }

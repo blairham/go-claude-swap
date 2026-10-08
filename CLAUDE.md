@@ -14,9 +14,9 @@ AGENTS.md, not here.
 
 - **Subagents** (`.claude/agents/`) — delegate proactively:
   - `switch-flow-auditor` — read-only; before changing `switcher`, `credentials`, `locks`, or `claudecfg`, traces the lock ordering, rollback path, and credential-store contract a change would have to preserve.
-  - `go-checks` — runs `make check` + `make lint` and triages failures across gofumpt, golangci-lint v2, and `go test -race`.
+  - `go-checks` — runs `make check` and triages failures across gofumpt, go vet, and `go test -race` (golangci-lint findings come from the pre-commit hook and CI, never a hand-started run).
 - **Slash commands** (`.claude/commands/`):
-  - `/check` — run the pre-PR gate (`make check` + `make lint`) and report failures. Pass a target (e.g. `test`) to scope it.
+  - `/check` — run the pre-PR gate (`make check`) and report failures. Pass a target (e.g. `test`) to scope it.
   - `/go-version-sync` — verify/fix the `go.mod` ↔ `.tool-versions` invariant via `make sync`. Pass `check` to report only.
 - **Skills** (`.claude/skills/`):
   - `ship` — run the gate, commit, push, and open a PR against `main` (`/ship`).

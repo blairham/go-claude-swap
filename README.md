@@ -131,8 +131,7 @@ of the original (consume-gate CAS persistence, provenance oracle probing).
 ## Development
 
 ```sh
-make check    # fmt + vet + test
-make lint     # golangci-lint
+make check    # fmt + vet + test (golangci-lint runs as a pre-commit hook and in CI)
 pre-commit install
 ```
 

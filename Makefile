@@ -5,7 +5,7 @@ COMMIT := $(shell git rev-parse --verify --quiet HEAD 2>/dev/null || echo "none"
 DATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -ldflags "-X github.com/blairham/go-claude-swap/internal/cmd.Version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)"
 
-.PHONY: all build clean test test-cover lint fmt vet tidy install check sync check-versions
+.PHONY: all build clean test test-cover fmt vet tidy install check sync check-versions
 
 all: build
 
@@ -26,9 +26,6 @@ test:
 test-cover:
 	go test -v -race -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
-
-lint:
-	go tool golangci-lint run ./...
 
 vet:
 	go vet ./...
@@ -73,4 +70,5 @@ proto:
 		--go-grpc_out=. --go-grpc_opt=module=github.com/blairham/go-claude-swap \
 		pkg/swapapi/swapapi.proto
 
+# There is no lint target: golangci-lint runs as a pre-commit hook and in CI.
 check: fmt vet test

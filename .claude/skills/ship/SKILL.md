@@ -13,7 +13,6 @@ allowed-tools:
   - Bash(git push -u origin *)
   - Bash(git push origin *)
   - Bash(make check)
-  - Bash(make lint)
   - Bash(make fmt)
   - Bash(make test)
   - Bash(make check-versions)
@@ -30,8 +29,8 @@ Commit changes on the current branch and open a pull request against main.
 
 ## Steps
 
-1. Run `make check` **and** `make lint`. This repo's `check` target is
-   `fmt vet test` and does not include lint, so both are required. If either
+1. Run `make check` (`fmt vet test`). There is no lint target: golangci-lint
+   runs as a pre-commit hook when you commit, and in CI. If anything
    fails, fix the issues and re-run before proceeding. Note that `fmt` rewrites
    files in place — re-stage anything it changed.
 2. Review `git diff` and `git status` to understand what changed.
@@ -50,7 +49,6 @@ Commit changes on the current branch and open a pull request against main.
 
      ## Test plan
      - [ ] `make check` passes
-     - [ ] `make lint` passes
      ```
 8. Report the PR URL.
 

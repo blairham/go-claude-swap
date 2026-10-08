@@ -129,6 +129,10 @@ func MappingsPath() string { return filepath.Join(BackupRoot(), "mappings.json")
 // LockPath is cswap's own switch lock.
 func LockPath() string { return filepath.Join(BackupRoot(), ".lock") }
 
+// HistoryPath is the append-only switch history (JSON Lines). The Python
+// original never reads it, so adding it leaves the shared layout intact.
+func HistoryPath() string { return filepath.Join(BackupRoot(), "switch-history.jsonl") }
+
 // SocketPath is the unix socket a running `cswap auto` loop serves its
 // control API on.
 func SocketPath() string { return filepath.Join(BackupRoot(), "cswap.sock") }

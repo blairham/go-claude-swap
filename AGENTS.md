@@ -39,6 +39,7 @@ internal/
   cmd/                   # One struct per CLI command + shared helpers (flag parsing, JSON envelopes)
   credentials/           # Live Claude Code credential (Keychain on macOS, file elsewhere) and
                          # cswap's per-account backups (Keychain-primary, base64 .enc fallback)
+  history/               # switch-history.jsonl — append-only, size-bounded record of every switch
   keychain/              # macOS `security` CLI wrapper for generic-password items
   locks/                 # cswap's flock file lock + Claude Code's proper-lockfile directory locks
   logfile/               # Size-rotated log file `cswap auto --log-file` writes (and dups onto stdout/stderr)
@@ -94,6 +95,6 @@ The invariants below are the reason most of this code is shaped the way it is. R
 
 ## Testing
 
-- `go test -race ./...`; unit tests cover `account`, `autoswitch`, `credentials`, `logfile`, `mappings`, `oauth`, `paths`, `service`, `settings`, `switcher`, `usage`, and `pkg/swapapi`
+- `go test -race ./...`; unit tests cover `account`, `autoswitch`, `cmd` (history), `credentials`, `history`, `logfile`, `mappings`, `oauth`, `paths`, `service`, `settings`, `switcher`, `usage`, and `pkg/swapapi`
 - The TUI and the live Keychain/credential paths are not unit-tested — they need an interactive terminal and a real login
 - Tests must never touch the real backup root, `~/.claude.json`, or the Keychain. The established pattern is `t.TempDir()` plus `t.Setenv` on `HOME` / `XDG_DATA_HOME` / `CLAUDE_CONFIG_DIR`, with every path resolved through `internal/paths` so the redirect takes effect

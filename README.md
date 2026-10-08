@@ -72,6 +72,7 @@ cswap service install         # any install: launchd (macOS) / systemd --user (L
 | `cswap config [list\|get\|set\|unset\|path]` | Settings (threshold, strategy, cooldown, theme, …) |
 | `cswap unclaimed` | Credentials preserved from displaced logins |
 | `cswap map [N\|alias\|email [PATH]]` / `unmap [PATH]` | Map a directory (and everything below it) to an account; bare `map` lists mappings. Shared with the Python claude-swap via `mappings.json` |
+| `cswap history [--since 7d] [--limit N] [--json]` | Recorded switches — manual and automatic — with trigger, utilization, and reason |
 
 Most read commands take `--json` for scripting; `cswap auto --json` emits
 JSONL events.
@@ -107,6 +108,11 @@ JSONL events.
   it for status, streams switch events live, and goes store-only while the
   service is running — one process owns the usage-request budget, and the
   dashboard reads its results from the shared cache.
+
+- **Switch history**: every completed switch (CLI, TUI, or auto) is appended
+  to `switch-history.jsonl` in the backup root — time, from, to, trigger,
+  the outgoing account's utilization, and reason — trimmed to the newest
+  1000 entries once it passes 512 KiB. `cswap history` reads it.
 
 Data lives in `~/.claude-swap-backup` (macOS) or
 `${XDG_DATA_HOME:-~/.local/share}/claude-swap` (Linux/WSL) — the same layout

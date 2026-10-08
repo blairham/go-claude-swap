@@ -204,7 +204,7 @@ func removeCmd(slot int) tea.Cmd {
 // switchCmd runs a switch off the UI goroutine.
 func switchCmd(slot int) tea.Cmd {
 	return func() tea.Msg {
-		res, err := switcher.SwitchTo(strconv.Itoa(slot), false)
+		res, err := switcher.SwitchToFrom(strconv.Itoa(slot), false, switcher.Origin{Trigger: "manual", Source: "tui"})
 		return switchDoneMsg{res: res, err: err}
 	}
 }

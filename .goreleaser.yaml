@@ -119,7 +119,10 @@ brews:
 release:
   draft: false
   replace_existing_draft: true
-  target_commitish: "{{ .Commit }}"
+  # No target_commitish: the tag already exists, and naming a commit makes
+  # GitHub treat the release as a ref write. When the release range touches
+  # .github/workflows, that needs the workflows permission GITHUB_TOKEN
+  # cannot have, and creating the release fails with a 403.
   prerelease: auto
   mode: replace
   footer: |

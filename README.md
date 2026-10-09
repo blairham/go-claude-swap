@@ -125,8 +125,9 @@ cswap config set ui.theme light
 
 ## Not (yet) ported
 
-Session mode (`cswap run`), setup-token accounts (`add-token`), the macOS menubar extra, and the deepest edge-case machinery
-of the original (consume-gate CAS persistence, provenance oracle probing).
+Session mode (`cswap run`), setup-token accounts (`add-token`), the macOS
+menubar extra, and the deepest edge-case machinery of the original
+(consume-gate CAS persistence, provenance oracle probing).
 
 ## Development
 

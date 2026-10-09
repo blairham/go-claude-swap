@@ -27,11 +27,15 @@ import (
 const (
 	strategyBest         = "best"
 	strategyConsumeFirst = "consume-first"
+	strategyBalance      = "balance"
 
 	triggerProactive    = "proactive"
 	triggerAtLimit      = "at-limit"
 	triggerFailover     = "failover"
 	triggerConsumeFirst = "consume-first"
+	// triggerBalance: balance strategy, active below the threshold, and a
+	// healthy candidate's weekly pace is well ahead of the active account's.
+	triggerBalance = "balance"
 	// triggerLeastBad: the active account is past the threshold, no
 	// candidate is healthy, and one has clearly more headroom — move to it
 	// now rather than riding the active account to 100%.
@@ -64,7 +68,7 @@ type Config struct {
 	Interval       float64  // seconds between polls
 	Cooldown       float64  // min seconds between proactive switches
 	Hysteresis     float64  // target must beat active headroom by this many pct
-	Strategy       string   // "best" or "consume-first"
+	Strategy       string   // "best", "consume-first", or "balance"
 	IncludeAPIKey  bool     // allow rotating onto managed API-key accounts
 	UnhealthyTicks int      // unknown-headroom ticks before failover
 	Models         []string // raw list; may contain the "auto"/"none" sentinels
@@ -144,7 +148,7 @@ func (e *Engine) normalize() {
 		e.UnhealthyTicks = int(math.Min(math.Max(float64(old), 1), 100))
 		e.configWarning(fmt.Sprintf("unhealthyTicks %d out of range, using %d", old, e.UnhealthyTicks))
 	}
-	if e.Strategy != strategyBest && e.Strategy != strategyConsumeFirst {
+	if e.Strategy != strategyBest && e.Strategy != strategyConsumeFirst && e.Strategy != strategyBalance {
 		e.configWarning(fmt.Sprintf("unknown strategy %q, using %q", e.Strategy, strategyBest))
 		e.Strategy = strategyBest
 	}
@@ -240,9 +244,20 @@ func (e *Engine) tick() tickResult {
 
 	trigger, ranked := e.selectTargets(trigger, oauthCands, apiCands, activeH, active)
 	if len(ranked) == 0 {
-		return e.blockedOutcome(trigger, active, activeH, oauthCands)
+		return e.nothingRanked(trigger, active, activeH, oauthCands, time.Now())
 	}
 	return result(e.performSwitch(trigger, active, activeH, ranked))
+}
+
+// nothingRanked classifies a tick whose ranking came back empty. For a
+// balance rebalance that is the steady state, not a block.
+func (e *Engine) nothingRanked(
+	trigger string, active *switcher.Snapshot, activeH *float64, cands []candidate, now time.Time,
+) tickResult {
+	if trigger == triggerBalance {
+		return e.balanced(active, now)
+	}
+	return e.blockedOutcome(trigger, active, activeH, cands)
 }
 
 // selectTargets orders the switch targets for this tick, possibly
@@ -251,7 +266,7 @@ func (e *Engine) selectTargets(
 	trigger string, oauthCands, apiCands []candidate, activeH *float64, active *switcher.Snapshot,
 ) (string, []candidate) {
 	ranked := e.rank(trigger, oauthCands, activeH, active)
-	if len(ranked) == 0 && trigger != triggerConsumeFirst {
+	if len(ranked) == 0 && trigger != triggerConsumeFirst && trigger != triggerBalance {
 		// API-key accounts have no usage windows to rank; they are the
 		// fallback when no measurable OAuth account qualifies.
 		ranked = apiCands
@@ -268,7 +283,7 @@ func (e *Engine) selectTargets(
 // works — so they honor the cooldown.
 func proactiveLike(trigger string) bool {
 	return trigger == triggerProactive || trigger == triggerConsumeFirst ||
-		trigger == triggerLeastBad || trigger == triggerProjected
+		trigger == triggerLeastBad || trigger == triggerProjected || trigger == triggerBalance
 }
 
 // decideTrigger classifies the active account. projected reports that the
@@ -294,8 +309,11 @@ func (e *Engine) decideTrigger(activeH *float64, projected bool) (trigger string
 		if projected {
 			return triggerProjected, 0, false
 		}
-		if e.Strategy == strategyConsumeFirst {
+		switch e.Strategy {
+		case strategyConsumeFirst:
 			return triggerConsumeFirst, 0, false
+		case strategyBalance:
+			return triggerBalance, 0, false
 		}
 		e.noSwitch("below-threshold", fmt.Sprintf("%s%% < %s%%", formatNum(util), formatNum(e.Threshold)))
 		return "", OutcomeNoAction, true
@@ -356,7 +374,10 @@ func (e *Engine) rank(trigger string, cands []candidate, activeH *float64, activ
 		return out
 	}
 
-	// proactive / consume-first: the target must be healthy.
+	// proactive / consume-first / balance: the target must be healthy.
+	if e.Strategy == strategyBalance {
+		return e.rankBalance(trigger, cands, activeH, active, time.Now())
+	}
 	if e.Strategy == strategyConsumeFirst {
 		activeReset := sevenDayReset(active.Usage)
 		if activeReset == 0 {
@@ -624,6 +645,8 @@ func (e *Engine) switchOrigin(trigger string, activeH *float64) switcher.Origin 
 		o.Reason = "active account at its limit"
 	case triggerConsumeFirst:
 		o.Reason = "consume-first: target resets sooner"
+	case triggerBalance:
+		o.Reason = "balance: target has more weekly headroom per hour to its reset"
 	default:
 		o.Reason = fmt.Sprintf("active at %s%% (threshold %s%%)", formatNum(util), formatNum(e.Threshold))
 	}

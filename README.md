@@ -138,6 +138,19 @@ cswap config set autoswitch.notify all         # important (default) | all | off
 cswap config set ui.theme light
 ```
 
+`autoswitch.strategy` picks the target when a switch is due:
+
+- `best` (default) — the account with the most headroom, once the active
+  account reaches the threshold.
+- `consume-first` — rotate early onto accounts whose weekly window resets
+  sooner, so their remaining budget is not wasted.
+- `balance` — pace the weekly budget across the roster. Each account's
+  *pace* is its weekly headroom per hour left until that weekly window
+  resets; rotation goes to the highest pace, and even below the threshold
+  the engine moves once a healthy account's pace is 1.5× the active
+  account's. Accounts are drawn down together rather than each drained to
+  the threshold in turn, so late in the week something still qualifies.
+
 ## Not (yet) ported
 
 Session mode (`cswap run`), the macOS menubar extra, and the deepest

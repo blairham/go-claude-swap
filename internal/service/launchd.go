@@ -20,7 +20,9 @@ func plistPath() string {
 // loop at login (which follows every reboot); KeepAlive restarts it if it
 // exits for any reason.
 func RenderPlist(exe string, extraArgs []string) string {
-	args := append([]string{exe, "auto"}, extraArgs...)
+	// --log-file makes the loop own (and rotate) the log; launchd's own
+	// redirect below still catches anything printed before it is open.
+	args := append([]string{exe, "auto", "--log-file", LogPath()}, extraArgs...)
 	var sb strings.Builder
 	sb.WriteString(xml.Header)
 	sb.WriteString(`<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

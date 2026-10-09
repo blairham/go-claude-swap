@@ -52,7 +52,7 @@ func (e Event) Human() string {
 	case "sleep":
 		until := e.str("until")
 		if t, err := time.Parse(account.TimeFormat, until); err == nil {
-			until = t.Local().Format("15:04:05")
+			until = t.Local().Format(time.RFC3339)
 		}
 		return fmt.Sprintf("sleeping %ss (until %s)", formatNum(e.flt("seconds")), until)
 	case "error":
@@ -202,7 +202,9 @@ func (s *JSONSink) Emit(ev Event) {
 	_, _ = s.w.Write(append(line, '\n'))
 }
 
-// HumanSink writes "HH:MM:SS  <human>" lines.
+// HumanSink writes "<RFC3339 local>  <human>" lines. The full date is in
+// every line because the service log spans weeks: a bare clock time cannot
+// be placed on a day.
 type HumanSink struct {
 	mu sync.Mutex
 	w  io.Writer
@@ -216,5 +218,5 @@ func NewHumanSink(w io.Writer) *HumanSink { return &HumanSink{w: w} }
 func (s *HumanSink) Emit(ev Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, _ = fmt.Fprintf(s.w, "%s  %s\n", ev.TS.Local().Format("15:04:05"), ev.Human())
+	_, _ = fmt.Fprintf(s.w, "%s  %s\n", ev.TS.Local().Format(time.RFC3339), ev.Human())
 }

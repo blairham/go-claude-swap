@@ -109,7 +109,7 @@ brews:
   install: |
     bin.install "cswap"
   service: |
-    run [opt_bin/"cswap", "auto"]
+    run [opt_bin/"cswap", "auto", "--log-file", var/"log/cswap-auto.log"]
     keep_alive true
     log_path var/"log/cswap-auto.log"
     error_log_path var/"log/cswap-auto.log"

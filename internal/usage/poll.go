@@ -14,8 +14,11 @@ const (
 	// MinInterval is the movement-halving floor.
 	MinInterval = 180.0
 	// UrgentInterval applies when the active account is moving inside the
-	// escalation band.
-	UrgentInterval = 60.0
+	// escalation band. It is the one cadence allowed below MinInterval, so it
+	// is sized to the budget: 150s is 24 requests an hour even if sustained.
+	// (It was 60s — double the budget — and only ever ran at the 180s serve
+	// TTL because a fresh row was served before its plan was consulted.)
+	UrgentInterval = 150.0
 	// ActiveMaxInterval caps the active account's cadence.
 	ActiveMaxInterval = 300.0
 	// CandidateDefaultInterval is a candidate's starting cadence.
@@ -113,6 +116,12 @@ func (e *Entry) Recent429(now time.Time) bool {
 		anchor = *e.BackoffUntil
 	}
 	return float64(now.Unix()) < anchor+recent429Window
+}
+
+// PlannedDue reports whether the row's persisted plan has come due. Unlike
+// PollDue it says nothing about rows without a plan.
+func (e *Entry) PlannedDue(now time.Time) bool {
+	return e != nil && e.NextPollAt != nil && float64(now.Unix()) >= *e.NextPollAt
 }
 
 // PollDue reports whether a fetch is due per the persisted plan. A plan that

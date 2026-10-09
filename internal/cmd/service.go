@@ -17,6 +17,15 @@ var probeControl = func() (*swapapi.GetStatusResponse, bool) {
 	return swapapi.Probe(time.Second)
 }
 
+// wakeEngine tells a running `cswap auto` loop that the roster changed, so
+// an account that just became usable is considered now rather than after the
+// loop's current sleep — which can be an hour when every account is
+// exhausted. Silent when no loop is running. A variable so tests need no
+// real socket.
+var wakeEngine = func() {
+	swapapi.Wake(time.Second)
+}
+
 // controlSocketLine reports whether a loop answers on the control socket —
 // whichever service (or terminal) started it.
 func controlSocketLine() string {

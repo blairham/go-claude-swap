@@ -86,6 +86,7 @@ func (c *AddTokenCommand) Run(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	wakeEngine()
 
 	kind := "setup-token"
 	if res.APIKey {

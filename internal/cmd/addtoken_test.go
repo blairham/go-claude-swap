@@ -20,6 +20,10 @@ func cmdEnv(t *testing.T) {
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	t.Setenv("CSWAP_DISABLE_KEYCHAIN", "1")
 	os.MkdirAll(filepath.Join(home, ".claude"), 0o700)
+	// Never reach for a control socket, even the temp HOME's.
+	old := wakeEngine
+	wakeEngine = func() {}
+	t.Cleanup(func() { wakeEngine = old })
 }
 
 func TestAddTokenReadsStdinDash(t *testing.T) {

@@ -112,6 +112,9 @@ func (c *LoginCommand) Run(args []string) int {
 		c.UI.Error("Error: " + err.Error())
 		return 1
 	}
+	// A new account, or a relogin that revives a credential-dead one, is a
+	// candidate the running loop should see now.
+	wakeEngine()
 
 	if res.Created {
 		c.UI.Output(fmt.Sprintf("Added Account-%d (%s)", res.Slot, res.Email))

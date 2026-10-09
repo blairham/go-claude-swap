@@ -106,6 +106,9 @@ func (c *ImportCommand) Run(args []string) int {
 		c.UI.Warn(w)
 	}
 	c.UI.Output(fmt.Sprintf("Imported %d, overwrote %d, skipped %d", res.Imported, res.Overwritten, res.Skipped))
+	if res.Imported+res.Overwritten > 0 {
+		wakeEngine()
+	}
 	return 0
 }
 

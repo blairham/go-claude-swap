@@ -114,12 +114,20 @@ func (c *Collector) fill(snap *Snapshot, store *usage.Store, client *http.Client
 
 	// Resolve the credential for this slot.
 	var cred string
-	var unreadable bool
+	var unreadable, sessionOwned bool
 	if snap.Active {
 		act := credentials.ReadActive()
 		cred, unreadable = act.Value, act.Unreadable
 	} else {
+		// A session profile may hold a newer generation than the backup;
+		// sessionOwned means a live Claude Code owns it and it must only be
+		// read, never refreshed.
+		var sessionCred string
+		sessionCred, sessionOwned = sessionCredForUsage(snap.Slot, a)
 		cred, unreadable = credentials.ReadBackup(snap.Slot, a.Email)
+		if sessionCred != "" {
+			cred, unreadable = sessionCred, false
+		}
 	}
 
 	switch {
@@ -158,7 +166,7 @@ func (c *Collector) fill(snap *Snapshot, store *usage.Store, client *http.Client
 
 	// Refresh an expired inactive token before the usage call. The active
 	// account is Claude Code's to refresh.
-	if !snap.Active && oauth.Expired(blob.OAuth.ExpiresAt, now) && blob.OAuth.RefreshToken != "" {
+	if !snap.Active && !sessionOwned && oauth.Expired(blob.OAuth.ExpiresAt, now) && blob.OAuth.RefreshToken != "" {
 		outcome := oauth.Refresh(client, []byte(cred), time.Now)
 		switch {
 		case outcome.Err == oauth.ErrNone:
@@ -178,7 +186,7 @@ func (c *Collector) fill(snap *Snapshot, store *usage.Store, client *http.Client
 	}
 
 	u, ferr := usage.Fetch(client, blob.OAuth.AccessToken)
-	if ferr != nil && ferr.HTTPStatus == 401 && !snap.Active && blob.OAuth.RefreshToken != "" {
+	if ferr != nil && ferr.HTTPStatus == 401 && !snap.Active && !sessionOwned && blob.OAuth.RefreshToken != "" {
 		// One refresh + one retry on a 401.
 		outcome := oauth.Refresh(client, []byte(cred), time.Now)
 		if outcome.Err == oauth.ErrNone {

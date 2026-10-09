@@ -20,6 +20,7 @@ import (
 	"github.com/blairham/go-claude-swap/internal/account"
 	"github.com/blairham/go-claude-swap/internal/keychain"
 	"github.com/blairham/go-claude-swap/internal/paths"
+	"github.com/blairham/go-claude-swap/internal/session"
 )
 
 // SharedKeys are machine-shared credential fields (MCP logins, plugin
@@ -328,7 +329,24 @@ func readBackupStore(encPath, keychainAccount string) (string, bool) {
 // WriteBackup stores a slot's credential backup, retaining the previous
 // generation as .prev first. Keychain-primary on macOS: after a successful
 // Keychain write the .enc is deleted so it cannot shadow future reads.
+//
+// It is also the session-invalidation chokepoint: once the backup has moved,
+// a `cswap run` profile seeded from the old generation is invalidated (or,
+// while Claude Code runs in it, flagged stale) so the next launch
+// re-bootstraps from the new one.
 func WriteBackup(slot int, email, cred string) error {
+	if err := WriteBackupKeepSession(slot, email, cred); err != nil {
+		return err
+	}
+	session.AfterBackupWrite(slot, email)
+	return nil
+}
+
+// WriteBackupKeepSession is WriteBackup without the session invalidation,
+// for the one writer that must not have it: adopting a session profile's
+// own newer credential into the backup, after which both hold the same
+// generation.
+func WriteBackupKeepSession(slot int, email, cred string) error {
 	retainPrev(slot, email)
 
 	encPath := paths.AccountCredsBackup(slot, email)

@@ -126,6 +126,9 @@ func UsageStorePath() string { return filepath.Join(CacheDir(), "usage.json") }
 // MappingsPath is the directory → account mapping table used by `cswap run`.
 func MappingsPath() string { return filepath.Join(BackupRoot(), "mappings.json") }
 
+// SessionsDir holds the per-account Claude Code profiles `cswap run` launches.
+func SessionsDir() string { return filepath.Join(BackupRoot(), "sessions") }
+
 // LockPath is cswap's own switch lock.
 func LockPath() string { return filepath.Join(BackupRoot(), ".lock") }
 

@@ -26,6 +26,7 @@ import (
 	"github.com/blairham/go-claude-swap/internal/mappings"
 	"github.com/blairham/go-claude-swap/internal/oauth"
 	"github.com/blairham/go-claude-swap/internal/paths"
+	"github.com/blairham/go-claude-swap/internal/session"
 	"github.com/blairham/go-claude-swap/internal/settings"
 	"github.com/blairham/go-claude-swap/internal/usage"
 )
@@ -278,6 +279,15 @@ func performSwitch(seq *account.Sequence, target int, force bool, origin Origin)
 			}
 		}
 	}
+
+	// A session profile may hold a newer generation of the target's token
+	// family than its backup: adopt it (or refuse, while it is live) before
+	// the backup is refreshed or activated.
+	sessWarns, err := reconcileSessionBeforeActivation(target, targetAcct)
+	if err != nil {
+		return nil, err
+	}
+	res.Warnings = append(res.Warnings, sessWarns...)
 
 	// Refresh a stale target token before taking any locks (no network I/O
 	// may happen under them). Handing Claude Code an expired token whose
@@ -622,6 +632,9 @@ func RemoveAccount(selector string) (*Removed, error) {
 		return nil, err
 	}
 	a := seq.Get(slot)
+	if err := ensureNoLiveSession(slot, a.Email, "the removal"); err != nil {
+		return nil, err
+	}
 	credentials.DeleteBackup(slot, a.Email)
 	os.Remove(paths.AccountConfigBackup(slot, a.Email))
 	seq.Remove(slot)
@@ -629,9 +642,12 @@ func RemoveAccount(selector string) (*Removed, error) {
 		return nil, err
 	}
 	r := &Removed{Slot: slot, Email: a.Email}
+	if err := session.Remove(session.Dir(slot, a.Email)); err != nil {
+		r.Warning = fmt.Sprintf("could not remove the session profile: %v", err)
+	}
 	n, perr := mappings.Open().PruneAccount(a.Email, a.OrganizationUUID)
 	if perr != nil {
-		r.Warning = fmt.Sprintf("could not prune directory mappings: %v", perr)
+		r.Warning = strings.TrimPrefix(r.Warning+"; ", "; ") + fmt.Sprintf("could not prune directory mappings: %v", perr)
 	}
 	r.PrunedMappings = n
 	return r, nil
@@ -733,6 +749,24 @@ func Move(selector string, targetSlot int) (swapped bool, otherEmail string, err
 		return false, "", fmt.Errorf("no account in slot %d", slot)
 	}
 	other := seq.Get(targetSlot)
+
+	// Session profiles are named by slot, so they move too; never under a
+	// running Claude Code.
+	moves := map[int]int{slot: targetSlot}
+	accts := map[int]*account.Account{slot: a}
+	if err := ensureNoLiveSession(slot, a.Email, "the move"); err != nil {
+		return false, "", err
+	}
+	if other != nil {
+		if err := ensureNoLiveSession(targetSlot, other.Email, "the move"); err != nil {
+			return false, "", err
+		}
+		moves[targetSlot] = slot
+		accts[targetSlot] = other
+	}
+	if err := relocateProfiles(moves, accts); err != nil {
+		return false, "", fmt.Errorf("moving session profiles: %w", err)
+	}
 
 	if err := relocateBackups(slot, targetSlot, a); err != nil {
 		return false, "", err

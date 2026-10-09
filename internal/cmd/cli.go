@@ -62,6 +62,9 @@ func CommandFactory() map[string]cli.CommandFactory {
 		"move": func() (cli.Command, error) {
 			return &MoveCommand{UI: ui}, nil
 		},
+		"run": func() (cli.Command, error) {
+			return &RunCommand{UI: ui}, nil
+		},
 		"map": func() (cli.Command, error) {
 			return &MapCommand{UI: ui}, nil
 		},

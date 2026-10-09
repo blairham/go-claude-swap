@@ -47,6 +47,7 @@ internal/
   notify/                # Desktop notifications: pinned /usr/bin/osascript (macOS), notify-send (Linux), 5s timeout
   oauth/                 # Token refresh (oauth.go) and the PKCE authorization-code login (authorize.go)
   paths/                 # Claude config locations and cswap's backup root, per OS
+  session/               # `cswap run` profiles: seed, validate (claude auth status), share, stale/live tracking
   service/               # launchd LaunchAgent (macOS) / systemd user unit (Linux) for the auto loop
   settings/              # settings.json — typed, bounded keys; forgiving load, strict `config set`
   switcher/              # Account lifecycle: capture, switch the live credential, roster maintenance
@@ -63,6 +64,7 @@ The invariants below are the reason most of this code is shaped the way it is. R
 - **Absent vs unreadable**: an unreadable credential store must never be treated as empty. That distinction gates backup overwrites and re-add advice — collapsing it silently destroys credentials.
 - **Auth axes are exclusive**: OAuth and managed API key cannot both be live; writing one clears the other.
 - **Config splicing**: only `oauthAccount` in `~/.claude.json` is per-account. Projects, MCP servers, `mcpOAuth`, `pluginSecrets`, and the rest are machine-shared and follow the live machine, not the slot.
+- **Session profiles hold the newest token**: Claude Code rotates the refresh token inside a `cswap run` profile and nothing syncs it back. `credentials.WriteBackup` is the invalidation chokepoint (a backup write invalidates the slot's profile, or flags it stale while it runs); switch, run, and the collector adopt a quiescent profile's newer credential first (`WriteBackupKeepSession`), and never refresh a live one.
 - **Nothing is discarded**: displaced credentials are stashed and surfaced by `cswap unclaimed`.
 - **Keychain access**: `internal/keychain` pins `/usr/bin/security` rather than resolving it from PATH, so the Keychain ACL entry survives interpreter changes. Every spawn has a 5s timeout.
 - **Usage request budget**: the usage endpoint budgets roughly 28–30 requests per trailing hour per identity. `internal/usage` exists to schedule within that (adaptive interval, hard backoff after a 429, reset-aligned wakeups). Don't add ad-hoc fetches — go through the scheduler and the cache.
@@ -93,9 +95,10 @@ The invariants below are the reason most of this code is shaped the way it is. R
 - `charmbracelet/bubbletea` + `lipgloss` — TUI
 - `google.golang.org/grpc` + `protobuf` — the service ⟷ TUI control API
 - `golang.org/x/sys` — platform syscalls (flock)
+- `golang.org/x/text` — NFC normalization, to derive the Keychain service Claude Code uses for a session profile
 
 ## Testing
 
-- `go test -race ./...`; unit tests cover `account`, `autoswitch`, `cmd` (history), `credentials`, `history`, `logfile`, `mappings`, `notify`, `oauth`, `paths`, `service`, `settings`, `switcher`, `usage`, and `pkg/swapapi`
+- `go test -race ./...`; unit tests cover `account`, `autoswitch`, `cmd` (history, run, add-token), `credentials`, `history`, `logfile`, `mappings`, `notify`, `oauth`, `paths`, `service`, `session`, `settings`, `switcher`, `usage`, and `pkg/swapapi`
 - The TUI and the live Keychain/credential paths are not unit-tested — they need an interactive terminal and a real login
 - Tests must never touch the real backup root, `~/.claude.json`, or the Keychain. The established pattern is `t.TempDir()` plus `t.Setenv` on `HOME` / `XDG_DATA_HOME` / `CLAUDE_CONFIG_DIR`, with every path resolved through `internal/paths` so the redirect takes effect

@@ -2,6 +2,7 @@ package swapapi
 
 import (
 	"context"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -124,4 +125,42 @@ func TestBroadcastSubscribeCancel(t *testing.T) {
 	}
 	// Emitting after cancel must not panic.
 	b.Emit(autoswitch.Event{Kind: "poll", TS: time.Now()})
+}
+
+// Wake is what roster-changing commands fire after a change (#40): it
+// reaches a live loop and is a quiet, fast no-op when none is running.
+func TestWakeClient(t *testing.T) {
+	sock := shortSockPath(t)
+	if wakeAt(sock, time.Second) {
+		t.Fatal("no socket file: no loop to wake")
+	}
+
+	// A stale socket file from a dead loop refuses the connection.
+	lis, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ul, ok := lis.(*net.UnixListener); ok {
+		ul.SetUnlinkOnClose(false)
+	}
+	lis.Close()
+	start := time.Now()
+	if wakeAt(sock, 2*time.Second) {
+		t.Fatal("stale socket: no loop to wake")
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Fatalf("stale socket took %v; must fail fast", d)
+	}
+	os.Remove(sock)
+
+	bcast := NewBroadcast(nil)
+	engine := autoswitch.NewEngine(autoswitch.Config{Threshold: 90, Interval: 60, Strategy: "best", UnhealthyTicks: 3}, bcast)
+	srv, err := Serve(sock, engine, bcast, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Stop()
+	if !wakeAt(sock, 3*time.Second) {
+		t.Fatal("a live loop must take the wake")
+	}
 }

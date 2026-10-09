@@ -53,6 +53,7 @@ func (c *AddCommand) Run(args []string) int {
 		return 1
 	}
 	c.UI.Output(fmt.Sprintf("Saved Account-%d (%s)", slot, email))
+	wakeEngine()
 	return 0
 }
 
@@ -157,6 +158,11 @@ func (c *DisableCommand) Run(args []string) int {
 	state := "enabled"
 	if c.Disable {
 		state = "disabled"
+	} else {
+		// A returned account is a new candidate. A disabled one needs no
+		// wake: the loop drops it on its next tick, and it is never a
+		// reason to switch sooner.
+		wakeEngine()
 	}
 	c.UI.Output(fmt.Sprintf("Account-%d (%s) %s", slot, email, state))
 	return 0

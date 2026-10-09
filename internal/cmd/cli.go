@@ -59,6 +59,12 @@ func CommandFactory() map[string]cli.CommandFactory {
 		"move": func() (cli.Command, error) {
 			return &MoveCommand{UI: ui}, nil
 		},
+		"map": func() (cli.Command, error) {
+			return &MapCommand{UI: ui}, nil
+		},
+		"unmap": func() (cli.Command, error) {
+			return &UnmapCommand{UI: ui}, nil
+		},
 		"config": func() (cli.Command, error) {
 			return &ConfigCommand{UI: ui}, nil
 		},

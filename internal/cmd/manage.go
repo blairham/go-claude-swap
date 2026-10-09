@@ -101,12 +101,18 @@ func (c *RemoveCommand) Run(args []string) int {
 			return 0
 		}
 	}
-	slot, email, err := switcher.Remove(remaining[0])
+	r, err := switcher.RemoveAccount(remaining[0])
 	if err != nil {
 		c.UI.Error("Error: " + err.Error())
 		return 1
 	}
-	c.UI.Output(fmt.Sprintf("Removed Account-%d (%s)", slot, email))
+	c.UI.Output(fmt.Sprintf("Removed Account-%d (%s)", r.Slot, r.Email))
+	if r.PrunedMappings > 0 {
+		c.UI.Output(fmt.Sprintf("Removed %d directory mapping(s) for this account", r.PrunedMappings))
+	}
+	if r.Warning != "" {
+		c.UI.Warn("Warning: " + r.Warning)
+	}
 	return 0
 }
 

@@ -243,13 +243,21 @@ func (e *Engine) tick() tickResult {
 	}
 
 	trigger, ranked := e.selectTargets(trigger, oauthCands, apiCands, activeH, active)
-	if len(ranked) == 0 && trigger == triggerBalance {
-		return e.balanced(active, time.Now())
-	}
 	if len(ranked) == 0 {
-		return e.blockedOutcome(trigger, active, activeH, oauthCands)
+		return e.nothingRanked(trigger, active, activeH, oauthCands, time.Now())
 	}
 	return result(e.performSwitch(trigger, active, activeH, ranked))
+}
+
+// nothingRanked classifies a tick whose ranking came back empty. For a
+// balance rebalance that is the steady state, not a block.
+func (e *Engine) nothingRanked(
+	trigger string, active *switcher.Snapshot, activeH *float64, cands []candidate, now time.Time,
+) tickResult {
+	if trigger == triggerBalance {
+		return e.balanced(active, now)
+	}
+	return e.blockedOutcome(trigger, active, activeH, cands)
 }
 
 // selectTargets orders the switch targets for this tick, possibly

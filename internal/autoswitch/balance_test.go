@@ -144,8 +144,12 @@ func TestBalanceTriggerWiring(t *testing.T) {
 		t.Fatalf("balance with nothing ahead = %q %v, want nothing", trig, slots(ranked))
 	}
 	// Nothing ahead is the steady state, not a block: no backoff.
-	if res := e.balanced(active, now); res.outcome != OutcomeNoAction {
-		t.Fatalf("balanced outcome = %v, want NoAction", res.outcome)
+	res := e.nothingRanked(triggerBalance, active, hp(90), []candidate{pacedCand(2, weekly(0, 20, 150, now))}, now)
+	if res.outcome != OutcomeNoAction {
+		t.Fatalf("balance with nothing ahead = outcome %v, want NoAction", res.outcome)
+	}
+	if d := e.delayAfter(res, now); d > 1.1*e.Interval {
+		t.Fatalf("balance with nothing ahead slept %vs; must keep the %vs interval", d, e.Interval)
 	}
 }
 

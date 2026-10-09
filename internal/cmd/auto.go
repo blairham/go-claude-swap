@@ -11,7 +11,9 @@ import (
 
 	"github.com/blairham/go-claude-swap/internal/autoswitch"
 	"github.com/blairham/go-claude-swap/internal/logfile"
+	"github.com/blairham/go-claude-swap/internal/notify"
 	"github.com/blairham/go-claude-swap/internal/paths"
+	"github.com/blairham/go-claude-swap/internal/settings"
 	"github.com/blairham/go-claude-swap/pkg/swapapi"
 )
 
@@ -119,6 +121,10 @@ func (c *AutoCommand) Run(args []string) int {
 			sink = autoswitch.NewQuietSink(sink, autoswitch.DefaultHeartbeat)
 		}
 	}
+
+	// Outermost, so it sees the polls QuietSink drops: recovery is read
+	// from them.
+	sink = autoswitch.NewNotifySink(sink, settings.Load().String("autoswitch.notify"), notify.Desktop())
 
 	if opts.Once {
 		return int(autoswitch.NewEngine(cfg, sink).RunOnce())

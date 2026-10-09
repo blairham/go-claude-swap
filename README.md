@@ -110,6 +110,13 @@ JSONL events.
   service is running — one process owns the usage-request budget, and the
   dashboard reads its results from the shared cache.
 
+- **Notifications**: `cswap auto` posts a desktop notification when it
+  switches at the limit or fails over, when every account is exhausted
+  (once per episode, with the earliest recovery time), and when an account
+  is usable again. macOS uses Notification Center via `/usr/bin/osascript`;
+  Linux uses `notify-send` when installed; elsewhere it stays silent. Both
+  work from the login service. `autoswitch.notify` picks the level:
+  `important` (default), `all` (every switch and quarantine too), or `off`.
 - **Switch history**: every completed switch (CLI, TUI, or auto) is appended
   to `switch-history.jsonl` in the backup root — time, from, to, trigger,
   the outgoing account's utilization, and reason — trimmed to the newest
@@ -127,6 +134,7 @@ cswap config set autoswitch.strategy consume-first
 cswap config set autoswitch.model auto         # follow Claude Code's model (default)
 cswap config set autoswitch.model Fable,Opus   # or pin the watched weekly limits
 cswap config set autoswitch.model none         # 5h/7d windows only
+cswap config set autoswitch.notify all         # important (default) | all | off
 cswap config set ui.theme light
 ```
 

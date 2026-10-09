@@ -44,6 +44,7 @@ internal/
   locks/                 # cswap's flock file lock + Claude Code's proper-lockfile directory locks
   logfile/               # Size-rotated log file `cswap auto --log-file` writes (and dups onto stdout/stderr)
   mappings/              # mappings.json: directory → account identity, for `cswap run` with no account
+  notify/                # Desktop notifications: pinned /usr/bin/osascript (macOS), notify-send (Linux), 5s timeout
   oauth/                 # Token refresh (oauth.go) and the PKCE authorization-code login (authorize.go)
   paths/                 # Claude config locations and cswap's backup root, per OS
   service/               # launchd LaunchAgent (macOS) / systemd user unit (Linux) for the auto loop
@@ -95,6 +96,6 @@ The invariants below are the reason most of this code is shaped the way it is. R
 
 ## Testing
 
-- `go test -race ./...`; unit tests cover `account`, `autoswitch`, `cmd` (history), `credentials`, `history`, `logfile`, `mappings`, `oauth`, `paths`, `service`, `settings`, `switcher`, `usage`, and `pkg/swapapi`
+- `go test -race ./...`; unit tests cover `account`, `autoswitch`, `cmd` (history), `credentials`, `history`, `logfile`, `mappings`, `notify`, `oauth`, `paths`, `service`, `settings`, `switcher`, `usage`, and `pkg/swapapi`
 - The TUI and the live Keychain/credential paths are not unit-tested — they need an interactive terminal and a real login
 - Tests must never touch the real backup root, `~/.claude.json`, or the Keychain. The established pattern is `t.TempDir()` plus `t.Setenv` on `HOME` / `XDG_DATA_HOME` / `CLAUDE_CONFIG_DIR`, with every path resolved through `internal/paths` so the redirect takes effect

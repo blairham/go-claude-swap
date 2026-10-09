@@ -38,9 +38,10 @@ func EngineRunning() bool {
 // Run ticks forever until ctx is canceled, then returns nil. Normal ticks
 // are spaced by the configured interval with ±10% jitter; a Blocked tick
 // with a known recovery instant sleeps until just past that reset (never
-// beyond 10 minutes), a Blocked tick whose active account is already past
-// the threshold keeps the normal interval, and any other Blocked tick backs
-// off to at least 5 minutes. A sleep event is emitted whenever the delay exceeds 1.5×interval.
+// beyond maxRecoveryWait), a Blocked tick whose active account is already
+// past the threshold keeps the normal interval, and any other Blocked tick
+// backs off to at least 5 minutes. A sleep event is emitted whenever the
+// delay exceeds 1.5×interval.
 func (e *Engine) Run(ctx context.Context) error {
 	// Hold the presence marker for the loop's lifetime so TUIs go
 	// store-only instead of double-spending the usage request budget.
@@ -79,12 +80,21 @@ func (e *Engine) RunOnce() Outcome {
 	return e.tick().outcome
 }
 
+// Recovery-wait pacing (seconds). When every account is exhausted the only
+// useful next tick is the one just after the earliest known reset; polling
+// before it spends the ~28/hr usage request budget to learn nothing. The cap
+// is what lets a wrong or moved reset time self-correct.
+const (
+	recoveryMargin  = 60.0
+	maxRecoveryWait = 3600.0
+)
+
 // delayAfter computes the next sleep in seconds.
 func (e *Engine) delayAfter(res tickResult, now time.Time) float64 {
 	if res.outcome == OutcomeBlocked && !res.pressing {
 		if res.recoverAt > 0 {
-			d := float64(res.recoverAt+60) - float64(now.Unix())
-			return math.Min(math.Max(d, e.Interval), 600)
+			d := float64(res.recoverAt) + recoveryMargin - float64(now.Unix())
+			return math.Min(math.Max(d, e.Interval), maxRecoveryWait)
 		}
 		return math.Max(e.Interval, 300)
 	}

@@ -36,6 +36,9 @@ type Snapshot struct {
 	LastGood *usage.Usage // stale fallback for display
 	Age      float64      // seconds since last good fetch; +Inf if never
 	LastErr  string
+	// NextPollAt is the epoch second the usage scheduler plans the next
+	// fetch for this row; 0 when there is no plan.
+	NextPollAt float64
 }
 
 // Collector fetches usage across accounts, respecting the store's cadence
@@ -46,6 +49,19 @@ type Collector struct {
 	StoreOnly bool
 	// Models folds per-model weekly windows into headroom.
 	Models []string
+	// Threshold is the auto-switch threshold the poll planner escalates
+	// toward; 0 means the default (90).
+	Threshold float64
+}
+
+// defaultThreshold matches the autoswitch.threshold setting's default.
+const defaultThreshold = 90.0
+
+func (c *Collector) threshold() float64 {
+	if c.Threshold > 0 {
+		return c.Threshold
+	}
+	return defaultThreshold
 }
 
 // Collect assembles snapshots for every account. The active account's token
@@ -89,6 +105,9 @@ func (c *Collector) fill(snap *Snapshot, store *usage.Store, client *http.Client
 		snap.Age = entry.Age(now)
 		snap.LastGood = entry.LastGood
 		snap.LastErr = entry.LastError
+		if entry.NextPollAt != nil {
+			snap.NextPollAt = *entry.NextPollAt
+		}
 	} else {
 		snap.Age = math.Inf(1)
 	}
@@ -121,7 +140,7 @@ func (c *Collector) fill(snap *Snapshot, store *usage.Store, client *http.Client
 		return
 	}
 
-	if entry != nil && entry.Fresh(now) {
+	if servesFresh(entry, snap.Active, now) {
 		snap.Status = StatusOK
 		snap.Usage = entry.LastGood
 		return
@@ -192,6 +211,17 @@ func (c *Collector) fill(snap *Snapshot, store *usage.Store, client *http.Client
 	c.persistSuccess(snap, u, now)
 }
 
+// servesFresh reports whether a row is fresh enough to serve without a
+// fetch. The active row follows its poll plan instead: the planner tightens
+// the active cadence below the serve TTL as it nears the threshold, and a
+// TTL shortcut would silently undo that.
+func servesFresh(entry *usage.Entry, active bool, now time.Time) bool {
+	if entry == nil || !entry.Fresh(now) {
+		return false
+	}
+	return !active || !entry.PlannedDue(now)
+}
+
 func (c *Collector) finishFromCache(snap *Snapshot, entry *usage.Entry, now time.Time) {
 	if entry != nil {
 		if dv := entry.DecisionValue(now, c.Models); dv != nil {
@@ -235,7 +265,7 @@ func (c *Collector) persistSuccess(snap *Snapshot, u *usage.Usage, now time.Time
 			PrevInterval: prevIv,
 			PrevPct:      prevPct,
 			NewPct:       newPct,
-			Threshold:    90,
+			Threshold:    c.threshold(),
 			Recent429:    recent429,
 			Exhausted:    exhausted,
 			EarliestRst:  u.EarliestFutureReset(c.Models, now),
@@ -243,6 +273,7 @@ func (c *Collector) persistSuccess(snap *Snapshot, u *usage.Usage, now time.Time
 		}, now)
 		e.NextPollAt = &next
 		e.PollIntervalS = &iv
+		snap.NextPollAt = next
 		s.Put(snap.Slot, e)
 	})
 }

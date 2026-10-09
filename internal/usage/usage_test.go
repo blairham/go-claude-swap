@@ -139,8 +139,8 @@ func TestPlanAfterFetch(t *testing.T) {
 	}
 	// Urgent: active, moving, inside the escalation band.
 	_, iv = PlanAfterFetch(PlanInput{Active: true, PrevInterval: 180, PrevPct: 70, NewPct: 80, Threshold: 90}, now)
-	if iv != 60 {
-		t.Errorf("urgent interval = %v, want 60", iv)
+	if iv != UrgentInterval || iv >= MinInterval {
+		t.Errorf("urgent interval = %v, want %v (below the %v floor)", iv, UrgentInterval, MinInterval)
 	}
 	// Recent 429 suppresses urgency.
 	_, iv = PlanAfterFetch(PlanInput{Active: true, PrevInterval: 180, PrevPct: 70, NewPct: 80, Threshold: 90, Recent429: true}, now)

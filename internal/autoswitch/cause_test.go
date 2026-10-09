@@ -60,7 +60,7 @@ func TestPollAndNoSwitchCarryUnknownCause(t *testing.T) {
 	head := map[string]*float64{"1": nil, "2": &h}
 
 	e.emitPoll(&snaps[0], snaps, head)
-	if _, _, done := e.decideTrigger(nil); !done {
+	if _, _, done := e.decideTrigger(nil, false); !done {
 		t.Fatal("first unknown tick should not fail over")
 	}
 	if len(rec.events) != 2 {

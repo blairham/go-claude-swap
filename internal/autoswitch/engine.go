@@ -36,6 +36,10 @@ const (
 	// candidate is healthy, and one has clearly more headroom — move to it
 	// now rather than riding the active account to 100%.
 	triggerLeastBad = "least-bad"
+	// triggerProjected: the active account is still below the threshold,
+	// but at its measured burn rate it will be past it before the engine
+	// next sees a fresh measurement — switch now rather than at 100%.
+	triggerProjected = "projected"
 )
 
 // freshenLead plus oauth.ExpiryBuffer gives the 10-minute pre-switch
@@ -101,6 +105,7 @@ type Engine struct {
 	// activeCause is why this tick's active headroom is unknown ("" when
 	// known), set by emitPoll so the no-switch line can say it too.
 	activeCause string
+	burn        burnTracker // the active account's recent measurements
 }
 
 // NewEngine builds an Engine over cfg and sink, emitting a config-warning
@@ -186,7 +191,7 @@ func (e *Engine) tick() tickResult {
 	e.releaseStaleQuarantines(seq)
 	st := loadState()
 
-	coll := &switcher.Collector{Client: e.Client, Models: e.models}
+	coll := &switcher.Collector{Client: e.Client, Models: e.models, Threshold: e.Threshold}
 	snaps := coll.Collect(seq)
 
 	head := make(map[string]*float64, len(snaps))
@@ -215,7 +220,7 @@ func (e *Engine) tick() tickResult {
 	}
 
 	activeH := head[strconv.Itoa(active.Slot)]
-	trigger, out, done := e.decideTrigger(activeH)
+	trigger, out, done := e.decideTrigger(activeH, e.projectCrossing(active, activeH, time.Now()))
 	if done {
 		return result(out)
 	}
@@ -262,12 +267,15 @@ func (e *Engine) selectTargets(
 // proactiveLike triggers are discretionary — the active account still
 // works — so they honor the cooldown.
 func proactiveLike(trigger string) bool {
-	return trigger == triggerProactive || trigger == triggerConsumeFirst || trigger == triggerLeastBad
+	return trigger == triggerProactive || trigger == triggerConsumeFirst ||
+		trigger == triggerLeastBad || trigger == triggerProjected
 }
 
-// decideTrigger classifies the active account. done=true means the tick is
-// finished with the returned Outcome and no switch is attempted.
-func (e *Engine) decideTrigger(activeH *float64) (trigger string, out Outcome, done bool) {
+// decideTrigger classifies the active account. projected reports that the
+// burn rate carries a below-threshold account past the threshold before the
+// next fresh measurement. done=true means the tick is finished with the
+// returned Outcome and no switch is attempted.
+func (e *Engine) decideTrigger(activeH *float64, projected bool) (trigger string, out Outcome, done bool) {
 	if activeH == nil {
 		e.unhealthy++
 		if e.unhealthy < e.UnhealthyTicks {
@@ -283,6 +291,9 @@ func (e *Engine) decideTrigger(activeH *float64) (trigger string, out Outcome, d
 	e.unhealthy = 0
 	util := 100 - *activeH
 	if util < e.Threshold {
+		if projected {
+			return triggerProjected, 0, false
+		}
 		if e.Strategy == strategyConsumeFirst {
 			return triggerConsumeFirst, 0, false
 		}
@@ -433,8 +444,9 @@ func sevenDayReset(u *usage.Usage) int64 {
 
 // blockedOutcome classifies an empty ranking: everything exhausted (with a
 // recovery hint for the runner), nothing measurable, or nothing qualifying.
-// A proactive trigger means the active account is past the threshold, so a
-// nothing-qualifies result is marked pressing: the runner keeps polling.
+// A proactive (or projected) trigger means the active account is past, or
+// about to pass, the threshold, so a nothing-qualifies result is marked
+// pressing: the runner keeps polling.
 func (e *Engine) blockedOutcome(trigger string, active *switcher.Snapshot, activeH *float64, cands []candidate) tickResult {
 	measured, exhausted := 0, 0
 	for _, c := range cands {
@@ -455,7 +467,7 @@ func (e *Engine) blockedOutcome(trigger string, active *switcher.Snapshot, activ
 		e.emit("all-exhausted", fields)
 		return tickResult{outcome: OutcomeBlocked, recoverAt: earliest}
 	}
-	pressing := trigger == triggerProactive
+	pressing := trigger == triggerProactive || trigger == triggerProjected
 	if measured == 0 {
 		e.noSwitch("no-comparison", "")
 		return tickResult{outcome: OutcomeBlocked, pressing: pressing}

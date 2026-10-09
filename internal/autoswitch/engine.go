@@ -289,7 +289,7 @@ func blockedPacing(trigger string, r tickResult) tickResult {
 	}
 	switch trigger {
 	case triggerConsumeFirst, triggerBalance, triggerProjected:
-		r.keepPolling, r.recoverAt = true, 0
+		r.keepPolling = true
 	case triggerProactive:
 		r.keepPolling = r.recoverAt == 0
 	}

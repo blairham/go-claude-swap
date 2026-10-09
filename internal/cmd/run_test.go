@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -56,8 +59,13 @@ func addAccount(t *testing.T, email string) {
 	home, _ := os.UserHomeDir()
 	cfg, _ := json.Marshal(map[string]any{"oauthAccount": map[string]any{"emailAddress": email, "organizationUuid": nil}})
 	os.WriteFile(filepath.Join(home, ".claude.json"), cfg, 0o600)
-	os.WriteFile(filepath.Join(home, ".claude", ".credentials.json"),
-		[]byte(`{"claudeAiOauth":{"accessToken":"at-`+email+`","refreshToken":"rt-`+email+`","expiresAt":9999999999000}}`), 0o600)
+	os.WriteFile(
+		filepath.Join(home, ".claude", ".credentials.json"),
+		[]byte(
+			`{"claudeAiOauth":{"accessToken":"at-`+email+`","refreshToken":"rt-`+email+`","expiresAt":9999999999000}}`,
+		),
+		0o600,
+	)
 	if _, _, err := switcher.Add(0, ""); err != nil {
 		t.Fatal(err)
 	}

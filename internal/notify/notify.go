@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package notify posts desktop notifications: Notification Center on macOS
 // through the pinned /usr/bin/osascript, notify-send on Linux when it is
 // installed, and nothing anywhere else. Every spawn is bounded by a timeout

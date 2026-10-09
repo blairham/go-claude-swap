@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package service
 
 import (
@@ -57,7 +60,11 @@ func installSystemd(exe string, extraArgs []string) (string, error) {
 			return "", fmt.Errorf("systemctl --user %s: %s: %w", strings.Join(args, " "), strings.TrimSpace(string(out)), err)
 		}
 	}
-	msg := fmt.Sprintf("Installed systemd user unit %s\n  unit: %s\nIt starts at login and restarts on crash.", unitName, path)
+	msg := fmt.Sprintf(
+		"Installed systemd user unit %s\n  unit: %s\nIt starts at login and restarts on crash.",
+		unitName,
+		path,
+	)
 	msg += "\nTo also run before you log in (headless machines): loginctl enable-linger $USER"
 	return msg, nil
 }

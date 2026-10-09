@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package oauth implements the Claude OAuth token-refresh flow used when
 // activating or polling inactive accounts. It operates on the same
 // credential blob format Claude Code itself stores ({"claudeAiOauth": ...}).

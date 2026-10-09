@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -16,7 +19,7 @@ type ExportCommand struct {
 // ExportFlags for cswap export.
 type ExportFlags struct {
 	Account string `long:"account" description:"Export only this account (number, alias, or email)"`
-	Full    bool   `long:"full" description:"Keep whole credential/config blobs (same-machine backup)"`
+	Full    bool   `long:"full"    description:"Keep whole credential/config blobs (same-machine backup)"`
 }
 
 // Help text.

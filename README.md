@@ -1,5 +1,12 @@
 # go-claude-swap
 
+[![CI](https://github.com/blairham/go-claude-swap/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/blairham/go-claude-swap/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/blairham/go-claude-swap?sort=semver)](https://github.com/blairham/go-claude-swap/releases/latest)
+[![CodeQL](https://github.com/blairham/go-claude-swap/actions/workflows/codeql.yml/badge.svg)](https://github.com/blairham/go-claude-swap/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/blairham/go-claude-swap/badge)](https://scorecard.dev/viewer/?uri=github.com/blairham/go-claude-swap)
+[![Go version](https://img.shields.io/github/go-mod/go-version/blairham/go-claude-swap)](go.mod)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 A Go rewrite of [claude-swap](https://github.com/realiti4/claude-swap) — a
 multi-account manager for [Claude Code](https://claude.com/claude-code).
 Switch between Claude accounts without logging out, watch usage across all of
@@ -176,13 +183,23 @@ original's gated one-refresh-per-bootstrap (#36).
 ## Development
 
 ```sh
-make check    # fmt + vet + test (golangci-lint runs as a pre-commit hook and in CI)
 pre-commit install
+make test     # go test -race ./...
 ```
+
+Formatting and golangci-lint run as pre-commit hooks; CI runs the shared
+workflows from [blairham/.github](https://github.com/blairham/.github). See
+[CONTRIBUTING.md](CONTRIBUTING.md). Report security issues privately, as
+[SECURITY.md](SECURITY.md) describes; it also shows how to verify a
+release's signature and provenance.
 
 ## Credits & license
 
-MIT. A from-scratch Go rewrite of
-[realiti4/claude-swap](https://github.com/realiti4/claude-swap) (MIT) — the
-storage layout, lock protocols, and switching semantics follow the original
-so the two stay compatible on disk.
+Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE). Releases up to
+and including v0.4.0 were published under MIT.
+
+A Go rewrite of [realiti4/claude-swap](https://github.com/realiti4/claude-swap)
+(MIT, Copyright (c) 2026 Onur Cetinkol) — the storage layout, lock
+protocols, and switching semantics follow the original so the two stay
+compatible on disk. `NOTICE` carries claude-swap's copyright and permission
+notice.

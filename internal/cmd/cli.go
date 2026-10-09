@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package cmd wires the cswap CLI: hashicorp/cli command dispatch with
 // go-flags option parsing per command.
 package cmd

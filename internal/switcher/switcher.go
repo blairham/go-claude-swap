@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package switcher implements the account lifecycle: capturing logins,
 // switching the live Claude Code credential between slots, and roster
 // maintenance.
@@ -81,7 +84,9 @@ func Add(slot int, alias string) (int, string, error) {
 		return 0, "", errors.New("failed to read the current credentials")
 	}
 	if active.Degraded {
-		return 0, "", errors.New("the Keychain could not be read (a plaintext fallback answered, but it may be stale) — retry from a GUI session")
+		return 0, "", errors.New(
+			"the Keychain could not be read (a plaintext fallback answered, but it may be stale) — retry from a GUI session",
+		)
 	}
 	if active.Value == "" {
 		return 0, "", errors.New("no credentials found for the current login")
@@ -347,10 +352,17 @@ func performSwitch(seq *account.Sequence, target int, force bool, origin Origin)
 		targetCreds, unreadable = freshCred, false
 	}
 	if unreadable {
-		return nil, fmt.Errorf("stored credentials for Account-%d are unreadable (Keychain locked?) — retry from a GUI session; do not re-add", target)
+		return nil, fmt.Errorf(
+			"stored credentials for Account-%d are unreadable (Keychain locked?) — retry from a GUI session; do not re-add",
+			target,
+		)
 	}
 	if targetCreds == "" {
-		return nil, fmt.Errorf("no stored credentials for Account-%d — run 'cswap login %d' to authenticate it", target, target)
+		return nil, fmt.Errorf(
+			"no stored credentials for Account-%d — run 'cswap login %d' to authenticate it",
+			target,
+			target,
+		)
 	}
 	targetCfg, err := os.ReadFile(paths.AccountConfigBackup(target, targetAcct.Email))
 	if err != nil {
@@ -407,7 +419,10 @@ func performSwitch(seq *account.Sequence, target int, force bool, origin Origin)
 				}
 				res.Warnings = append(res.Warnings, fmt.Sprintf("could not preserve the current login: %v", err))
 			} else {
-				res.Warnings = append(res.Warnings, "current login was not a managed account; its credentials were stashed (see 'cswap unclaimed')")
+				res.Warnings = append(
+					res.Warnings,
+					"current login was not a managed account; its credentials were stashed (see 'cswap unclaimed')",
+				)
 			}
 		}
 	}
@@ -571,13 +586,30 @@ func freshenTarget(slot int, email string, force bool) (string, []string, error)
 			return fresh, []string{warn}, nil
 		}
 		if force {
-			return "", []string{fmt.Sprintf("Account-%d's stored token can no longer be refreshed (%s); Claude Code may ask you to log in", slot, outcome.Err)}, nil
+			return "", []string{
+				fmt.Sprintf(
+					"Account-%d's stored token can no longer be refreshed (%s); Claude Code may ask you to log in",
+					slot,
+					outcome.Err,
+				),
+			}, nil
 		}
-		return "", nil, fmt.Errorf("stored credentials for Account-%d can no longer be refreshed (%s) — run 'cswap login %d' to re-authenticate it: %w", slot, outcome.Err, slot, oauth.ErrPermanent)
+		return "", nil, fmt.Errorf(
+			"stored credentials for Account-%d can no longer be refreshed (%s) — run 'cswap login %d' to re-authenticate it: %w",
+			slot,
+			outcome.Err,
+			slot,
+			oauth.ErrPermanent,
+		)
 	default:
 		// Transient (network, 5xx): activate as-is — Claude Code retries
 		// the refresh itself once the endpoint is reachable.
-		return "", []string{fmt.Sprintf("could not refresh Account-%d's expired token (temporary failure); Claude Code will retry after activation", slot)}, nil
+		return "", []string{
+			fmt.Sprintf(
+				"could not refresh Account-%d's expired token (temporary failure); Claude Code will retry after activation",
+				slot,
+			),
+		}, nil
 	}
 }
 
@@ -846,7 +878,11 @@ func StashCredential(cred, reason string, slot int) error {
 	id := fmt.Sprintf("%s-%s-%06x", time.Now().UTC().Format("20060102T150405"), short, time.Now().UnixNano()&0xffffff)
 
 	entryPath := paths.CredentialsDir() + "/.unclaimed-" + id + ".enc"
-	if err := account.WriteFileAtomic(entryPath, []byte(base64.StdEncoding.EncodeToString([]byte(cred))), 0o600); err != nil {
+	if err := account.WriteFileAtomic(
+		entryPath,
+		[]byte(base64.StdEncoding.EncodeToString([]byte(cred))),
+		0o600,
+	); err != nil {
 		return err
 	}
 

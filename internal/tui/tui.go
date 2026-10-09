@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package tui implements cswap's full-screen terminal interface: a
 // dashboard of account usage, a switch picker, and a live watch view,
 // built on Bubble Tea.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package service installs the auto-switch loop as a login service that
 // runs continuously and restarts on crash and reboot: a launchd
 // LaunchAgent on macOS, a systemd user unit on Linux.

@@ -1,0 +1,31 @@
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+# Rendered from blairham/.github baseline/dependabot.yml.tmpl by `make sync`.
+# Groups are derived from go.mod: a group appears when the module requires
+# something it covers. The docker ecosystem appears when there is a Dockerfile.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 10
+    groups:
+      # The Charm stack (bubbletea, bubbles, lipgloss) and tuikit, which builds
+      # on it, move as one line.
+      charm:
+        patterns:
+          - "charm.land/*"
+          - "github.com/charmbracelet/*"
+          - "github.com/blairham/tuikit"
+      # Generated gRPC code is tied to both modules.
+      grpc:
+        patterns:
+          - "google.golang.org/grpc"
+          - "google.golang.org/protobuf"
+  # Bumps the SHA pins and their `# vX.Y.Z` comments together, including the
+  # pin on blairham/.github's reusable workflows.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

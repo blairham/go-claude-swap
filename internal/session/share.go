@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package session
 
 import (
@@ -242,12 +245,19 @@ func prepareHistoryShare(src, dest, dir string) (bool, []string) {
 	name := filepath.Base(dest)
 	if fi, err := os.Lstat(dest); err == nil && fi.Mode()&os.ModeSymlink == 0 {
 		if !Quiescent(dir) {
-			return false, []string{fmt.Sprintf("Not sharing %s yet: another session is using this profile — retrying on the next launch.", name)}
+			return false, []string{
+				fmt.Sprintf("Not sharing %s yet: another session is using this profile — retrying on the next launch.", name),
+			}
 		}
 		if err := mergeHistoryIntoSource(src, dest); err != nil {
-			return false, []string{fmt.Sprintf("Not sharing %s: merging the profile's existing history into %s failed: %v", name, src, err)}
+			return false, []string{
+				fmt.Sprintf("Not sharing %s: merging the profile's existing history into %s failed: %v", name, src, err),
+			}
 		}
-		notes = append(notes, fmt.Sprintf("Merged the profile's existing %s into %s — conversation history is now shared.", name, src))
+		notes = append(
+			notes,
+			fmt.Sprintf("Merged the profile's existing %s into %s — conversation history is now shared.", name, src),
+		)
 	}
 	if _, err := os.Stat(src); err != nil {
 		// 0600/0700 to match Claude Code's own modes for history data.

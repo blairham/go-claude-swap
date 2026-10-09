@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Command cswap is a Go rewrite of claude-swap (realiti4/claude-swap): a
 // multi-account manager for Claude Code. It captures the current Claude Code
 // login into named accounts, switches between them safely (holding Claude

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package logfile is a size-bounded, self-rotating append-only log file for
 // the long-running `cswap auto` service.
 //

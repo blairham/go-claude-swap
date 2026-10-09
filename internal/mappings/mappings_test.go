@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package mappings
 
 import (
@@ -153,7 +156,8 @@ func TestReadsPythonFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e := all["/home/u/work"]; e.Email != "work@co.com" || e.OrganizationUUID != "org-1" || e.Added != "2026-01-02T03:04:05Z" {
+	if e := all["/home/u/work"]; e.Email != "work@co.com" || e.OrganizationUUID != "org-1" ||
+		e.Added != "2026-01-02T03:04:05Z" {
 		t.Fatalf("work entry = %+v", e)
 	}
 	if e := all["/home/u/work/client"]; e.Email != "josé@x.com" {
@@ -184,7 +188,11 @@ func TestRewritePreservesUnknownFields(t *testing.T) {
 	home := env(t)
 	s := Open()
 	os.MkdirAll(filepath.Dir(s.path), 0o700)
-	os.WriteFile(s.path, []byte(`{"schemaVersion":1,"mappings":{"/keep":{"email":"k@x.com","organizationUuid":"","added":"t","future":42}}}`), 0o600)
+	os.WriteFile(
+		s.path,
+		[]byte(`{"schemaVersion":1,"mappings":{"/keep":{"email":"k@x.com","organizationUuid":"","added":"t","future":42}}}`),
+		0o600,
+	)
 	if _, _, err := s.Set(mkdir(t, home, "new"), "n@x.com", ""); err != nil {
 		t.Fatal(err)
 	}

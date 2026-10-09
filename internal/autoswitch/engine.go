@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package autoswitch implements the cswap auto loop: polling per-account
 // usage, deciding when the active account should be rotated, and performing
 // the switch — with cooldown, hysteresis, and quarantine guards persisted in
@@ -551,7 +554,12 @@ func (e *Engine) earliestRecovery(active *switcher.Snapshot, activeH *float64, c
 
 // performSwitch activates the best ranked candidate, walking down the list
 // past candidates whose credential cannot be freshened.
-func (e *Engine) performSwitch(trigger string, active *switcher.Snapshot, activeH *float64, ranked []candidate) Outcome {
+func (e *Engine) performSwitch(
+	trigger string,
+	active *switcher.Snapshot,
+	activeH *float64,
+	ranked []candidate,
+) Outcome {
 	if e.DryRun {
 		c := ranked[0]
 		e.emit("switch", map[string]any{

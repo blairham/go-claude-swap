@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package claudecfg reads and edits Claude Code's global config
 // (~/.claude.json). Only the oauthAccount object is account-specific; every
 // other key is machine state and must be preserved across switches.

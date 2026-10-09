@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package swapapi is the gRPC control API a running `cswap auto` loop
 // serves over a unix socket in the backup root: presence/status, a live
 // event stream, and wake-for-immediate-tick. The socket doubles as the

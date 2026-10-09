@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package locks provides the two lock protocols a switch must hold: cswap's
 // own flock-based file lock, and Claude Code's proper-lockfile-compatible
 // directory locks (mkdir is the mutex, mtime is the heartbeat).

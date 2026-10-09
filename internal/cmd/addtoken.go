@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -22,9 +25,9 @@ type AddTokenCommand struct {
 
 // AddTokenFlags for cswap add-token.
 type AddTokenFlags struct {
-	Slot  int    `long:"slot" description:"Slot number to use (default: next free)"`
+	Slot  int    `long:"slot"  description:"Slot number to use (default: next free)"`
 	Email string `long:"email" description:"Email to record for the account"`
-	JSON  bool   `long:"json" description:"Emit JSON"`
+	JSON  bool   `long:"json"  description:"Emit JSON"`
 }
 
 // Help text.

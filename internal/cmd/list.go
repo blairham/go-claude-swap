@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -19,7 +22,7 @@ type ListCommand struct {
 
 // ListFlags for cswap list.
 type ListFlags struct {
-	JSON        bool `long:"json" description:"Emit machine-readable JSON"`
+	JSON        bool `long:"json"         description:"Emit machine-readable JSON"`
 	TokenStatus bool `long:"token-status" description:"Show source-labeled OAuth token diagnostics"`
 }
 

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package autoswitch
 
 import (
@@ -109,8 +112,11 @@ func TestNotifySinkLevels(t *testing.T) {
 	got, n := recorder()
 	s := NewNotifySink(nil, NotifyAll, n)
 	s.Emit(switchEv(triggerProactive, false))
-	s.Emit(Event{Kind: "account-quarantined", Fields: map[string]any{"number": 3, "email": "c@b.co", "reason": "invalid_grant"}})
-	if len(*got) != 2 || !strings.Contains((*got)[0].body, "(proactive)") || !strings.Contains((*got)[1].body, "Account-3") {
+	s.Emit(
+		Event{Kind: "account-quarantined", Fields: map[string]any{"number": 3, "email": "c@b.co", "reason": "invalid_grant"}},
+	)
+	if len(*got) != 2 || !strings.Contains((*got)[0].body, "(proactive)") ||
+		!strings.Contains((*got)[1].body, "Account-3") {
 		t.Fatalf("all level = %v", *got)
 	}
 }

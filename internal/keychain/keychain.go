@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package keychain wraps the macOS `security` CLI for generic-password
 // items. The binary path is pinned to /usr/bin/security (never PATH) so the
 // Keychain ACL entry survives interpreter changes, and every spawn has a 5s

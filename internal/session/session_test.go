@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package session
 
 import (
@@ -29,7 +32,9 @@ func TestNamesMatchOriginal(t *testing.T) {
 	if got := Slugify("a b/c@x.co"); got != "a_b_c_x.co" {
 		t.Errorf("Slugify = %q", got)
 	}
-	if got := KeychainService("/Users/u/.claude-swap-backup/sessions/2-me_example.com"); got != "Claude Code-credentials-576dce4a" {
+	if got := KeychainService(
+		"/Users/u/.claude-swap-backup/sessions/2-me_example.com",
+	); got != "Claude Code-credentials-576dce4a" {
 		t.Errorf("KeychainService = %q", got)
 	}
 	// NFD input hashes as its NFC form, as Claude Code does.
@@ -102,7 +107,9 @@ func TestBootstrapMergesConfig(t *testing.T) {
 	dir := Dir(1, "a@b.co")
 	os.MkdirAll(dir, 0o700)
 	os.WriteFile(filepath.Join(dir, ".claude.json"), []byte(`{"projects":{"/p":{}},"theme":"light"}`), 0o600)
-	cfg := []byte(`{"oauthAccount":{"emailAddress":"a@b.co","organizationUuid":null},"theme":"dark","projects":{"/machine":{}}}`)
+	cfg := []byte(
+		`{"oauthAccount":{"emailAddress":"a@b.co","organizationUuid":null},"theme":"dark","projects":{"/machine":{}}}`,
+	)
 	if err := Bootstrap(dir, `{"claudeAiOauth":{"accessToken":"at"}}`, cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +209,9 @@ func TestCheck(t *testing.T) {
 }
 
 func TestScrubbedEnv(t *testing.T) {
-	got := ScrubbedEnv([]string{"PATH=/bin", "ANTHROPIC_API_KEY=k", "CLAUDE_CONFIG_DIR=/x", "CLAUDE_CODE_OAUTH_TOKEN=t", "HOME=/h"})
+	got := ScrubbedEnv(
+		[]string{"PATH=/bin", "ANTHROPIC_API_KEY=k", "CLAUDE_CONFIG_DIR=/x", "CLAUDE_CODE_OAUTH_TOKEN=t", "HOME=/h"},
+	)
 	if strings.Join(got, ",") != "PATH=/bin,HOME=/h" {
 		t.Fatalf("env = %v", got)
 	}

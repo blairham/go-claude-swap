@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package autoswitch
 
 import "testing"
@@ -11,10 +14,18 @@ func TestSwitchOriginCarriesTriggerAndUtilization(t *testing.T) {
 		t.Errorf("proactive origin = %+v", o)
 	}
 	zero := 0.0
-	if o := e.switchOrigin(triggerAtLimit, &zero); *o.ActiveUtilizationPct != 100 || o.Reason != "active account at its limit" {
+	if o := e.switchOrigin(
+		triggerAtLimit,
+		&zero,
+	); *o.ActiveUtilizationPct != 100 ||
+		o.Reason != "active account at its limit" {
 		t.Errorf("at-limit origin = %+v", o)
 	}
-	if o := e.switchOrigin(triggerFailover, nil); o.ActiveUtilizationPct != nil || o.Trigger != triggerFailover || o.Reason == "" {
+	if o := e.switchOrigin(
+		triggerFailover,
+		nil,
+	); o.ActiveUtilizationPct != nil || o.Trigger != triggerFailover ||
+		o.Reason == "" {
 		t.Errorf("failover origin = %+v", o)
 	}
 }

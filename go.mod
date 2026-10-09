@@ -1,6 +1,6 @@
 module github.com/blairham/go-claude-swap
 
-go 1.26.6
+go 1.26.9
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
@@ -9,7 +9,7 @@ require (
 	github.com/jessevdk/go-flags v1.6.1
 	golang.org/x/sys v0.48.0
 	golang.org/x/text v0.42.0
-	google.golang.org/grpc v1.83.1
+	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.12
 )
 
@@ -234,7 +234,7 @@ require (
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20260811152304-ee035b5b010f // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/tools v0.50.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect

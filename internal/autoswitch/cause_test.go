@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package autoswitch
 
 import (
@@ -19,12 +22,24 @@ func TestUnknownCause(t *testing.T) {
 		want string // substring; "" means the cause must be empty
 	}{
 		{"known", switcher.Snapshot{Status: switcher.StatusOK, Usage: good}, ""},
-		{"429", switcher.Snapshot{Status: switcher.StatusUnavailable, LastErr: "http-429", Age: inf}, "rate limited (HTTP 429)"},
-		{"429 with stale data", switcher.Snapshot{Status: switcher.StatusUnavailable, LastErr: "http-429", LastGood: good, Age: 47 * 60}, "rate limited (HTTP 429); last good data 47m old"},
+		{
+			"429",
+			switcher.Snapshot{Status: switcher.StatusUnavailable, LastErr: "http-429", Age: inf},
+			"rate limited (HTTP 429)",
+		},
+		{
+			"429 with stale data",
+			switcher.Snapshot{Status: switcher.StatusUnavailable, LastErr: "http-429", LastGood: good, Age: 47 * 60},
+			"rate limited (HTTP 429); last good data 47m old",
+		},
 		{"network", switcher.Snapshot{Status: switcher.StatusUnavailable, LastErr: "network", Age: inf}, "network error"},
 		{"timeout", switcher.Snapshot{Status: switcher.StatusUnavailable, LastErr: "timeout", Age: inf}, "timed out"},
 		{"http 503", switcher.Snapshot{Status: switcher.StatusUnavailable, LastErr: "http-503", Age: inf}, "HTTP 503"},
-		{"stale cache", switcher.Snapshot{Status: switcher.StatusUnavailable, LastGood: good, Age: 3 * 3600}, "cached usage too stale to decide on (last good data 3h old)"},
+		{
+			"stale cache",
+			switcher.Snapshot{Status: switcher.StatusUnavailable, LastGood: good, Age: 3 * 3600},
+			"cached usage too stale to decide on (last good data 3h old)",
+		},
 		{"never fetched", switcher.Snapshot{Status: switcher.StatusUnavailable, Age: inf}, "no usage data yet"},
 		{"expired token", switcher.Snapshot{Status: switcher.StatusTokenExpired}, "expired"},
 		{"relogin", switcher.Snapshot{Status: switcher.StatusReloginRequired}, "re-login"},
@@ -53,7 +68,14 @@ func TestPollAndNoSwitchCarryUnknownCause(t *testing.T) {
 	e := &Engine{Config: Config{Threshold: 90, UnhealthyTicks: 3}, Sink: rec}
 	good := &usage.Usage{FiveHour: &usage.Window{Pct: 40}}
 	snaps := []switcher.Snapshot{
-		{Slot: 1, Account: &account.Account{Email: "a@example.com"}, Active: true, Status: switcher.StatusUnavailable, LastErr: "http-429", Age: math.Inf(1)},
+		{
+			Slot:    1,
+			Account: &account.Account{Email: "a@example.com"},
+			Active:  true,
+			Status:  switcher.StatusUnavailable,
+			LastErr: "http-429",
+			Age:     math.Inf(1),
+		},
 		{Slot: 2, Account: &account.Account{Email: "b@example.com"}, Status: switcher.StatusOK, Usage: good},
 	}
 	h := 60.0

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package usage fetches, normalizes, caches, and schedules polling of
 // per-account rate-limit windows from the Claude OAuth usage endpoint.
 package usage
@@ -6,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strconv"
@@ -82,59 +86,88 @@ func Fetch(client *http.Client, accessToken string) (*Usage, *FetchError) {
 		return nil, fe
 	}
 
-	var raw struct {
-		FiveHour *struct {
-			Utilization float64 `json:"utilization"`
-			ResetsAt    *string `json:"resets_at"`
-		} `json:"five_hour"`
-		SevenDay *struct {
-			Utilization float64 `json:"utilization"`
-			ResetsAt    *string `json:"resets_at"`
-		} `json:"seven_day"`
-		ExtraUsage *struct {
-			IsEnabled    bool     `json:"is_enabled"`
-			UsedCredits  *float64 `json:"used_credits"`
-			MonthlyLimit *float64 `json:"monthly_limit"`
-			Utilization  *float64 `json:"utilization"`
-			Currency     string   `json:"currency"`
-			ResetsAt     *string  `json:"resets_at"`
-		} `json:"extra_usage"`
-		Limits []struct {
-			Scope *struct {
-				Model *struct {
-					DisplayName string `json:"display_name"`
-				} `json:"model"`
-			} `json:"scope"`
-			Percent  float64 `json:"percent"`
-			ResetsAt *string `json:"resets_at"`
-		} `json:"limits"`
+	return parseUsage(resp.Body)
+}
+
+// rawWindow is a 5h or 7d window as the usage endpoint sends it.
+type rawWindow struct {
+	ResetsAt    *string `json:"resets_at"`
+	Utilization float64 `json:"utilization"`
+}
+
+func (w *rawWindow) normalize() *Window {
+	if w == nil {
+		return nil
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+	return &Window{Pct: w.Utilization, ResetsAt: strOr(w.ResetsAt)}
+}
+
+// rawExtraUsage is the overage-billing block; credits are in cents.
+type rawExtraUsage struct {
+	UsedCredits  *float64 `json:"used_credits"`
+	MonthlyLimit *float64 `json:"monthly_limit"`
+	Utilization  *float64 `json:"utilization"`
+	ResetsAt     *string  `json:"resets_at"`
+	Currency     string   `json:"currency"`
+	IsEnabled    bool     `json:"is_enabled"`
+}
+
+// normalize returns nil unless the block is enabled and complete.
+func (e *rawExtraUsage) normalize() *Spend {
+	if e == nil || !e.IsEnabled || e.UsedCredits == nil || e.MonthlyLimit == nil || e.Utilization == nil {
+		return nil
+	}
+	cur := e.Currency
+	if cur == "" {
+		cur = "USD"
+	}
+	return &Spend{
+		Used: *e.UsedCredits / 100, Limit: *e.MonthlyLimit / 100,
+		Pct: *e.Utilization, Currency: cur, ResetsAt: strOr(e.ResetsAt),
+	}
+}
+
+// rawLimit is one scoped (per-model weekly) limit.
+type rawLimit struct {
+	Scope *struct {
+		Model *struct {
+			DisplayName string `json:"display_name"`
+		} `json:"model"`
+	} `json:"scope"`
+	ResetsAt *string `json:"resets_at"`
+	Percent  float64 `json:"percent"`
+}
+
+// normalize reports false for a limit with no model name to match on.
+func (l *rawLimit) normalize() (Window, bool) {
+	if l.Scope == nil || l.Scope.Model == nil || l.Scope.Model.DisplayName == "" {
+		return Window{}, false
+	}
+	return Window{Name: l.Scope.Model.DisplayName, Pct: l.Percent, ResetsAt: strOr(l.ResetsAt)}, true
+}
+
+// parseUsage normalizes a 200 response body from the usage endpoint. A body
+// that does not decode, or that carries no window at all, is a bad response.
+func parseUsage(r io.Reader) (*Usage, *FetchError) {
+	var raw struct {
+		FiveHour   *rawWindow     `json:"five_hour"`
+		SevenDay   *rawWindow     `json:"seven_day"`
+		ExtraUsage *rawExtraUsage `json:"extra_usage"`
+		Limits     []rawLimit     `json:"limits"`
+	}
+	if err := json.NewDecoder(r).Decode(&raw); err != nil {
 		return nil, &FetchError{Kind: "bad-response"}
 	}
 
-	u := &Usage{}
-	if raw.FiveHour != nil {
-		u.FiveHour = &Window{Pct: raw.FiveHour.Utilization, ResetsAt: strOr(raw.FiveHour.ResetsAt)}
+	u := &Usage{
+		FiveHour: raw.FiveHour.normalize(),
+		SevenDay: raw.SevenDay.normalize(),
+		Spend:    raw.ExtraUsage.normalize(),
 	}
-	if raw.SevenDay != nil {
-		u.SevenDay = &Window{Pct: raw.SevenDay.Utilization, ResetsAt: strOr(raw.SevenDay.ResetsAt)}
-	}
-	if e := raw.ExtraUsage; e != nil && e.IsEnabled && e.UsedCredits != nil && e.MonthlyLimit != nil && e.Utilization != nil {
-		cur := e.Currency
-		if cur == "" {
-			cur = "USD"
+	for i := range raw.Limits {
+		if w, ok := raw.Limits[i].normalize(); ok {
+			u.Scoped = append(u.Scoped, w)
 		}
-		u.Spend = &Spend{
-			Used: *e.UsedCredits / 100, Limit: *e.MonthlyLimit / 100,
-			Pct: *e.Utilization, Currency: cur, ResetsAt: strOr(e.ResetsAt),
-		}
-	}
-	for _, l := range raw.Limits {
-		if l.Scope == nil || l.Scope.Model == nil || l.Scope.Model.DisplayName == "" {
-			continue
-		}
-		u.Scoped = append(u.Scoped, Window{Name: l.Scope.Model.DisplayName, Pct: l.Percent, ResetsAt: strOr(l.ResetsAt)})
 	}
 	if u.FiveHour == nil && u.SevenDay == nil && u.Spend == nil && len(u.Scoped) == 0 {
 		return nil, &FetchError{Kind: "bad-response"}

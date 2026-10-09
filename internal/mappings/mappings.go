@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package mappings stores directory → account mappings: a normalized
 // absolute directory path keyed to a stored account identity, so that
 // `cswap run` with no account argument can launch the account mapped to the
@@ -21,6 +24,7 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/blairham/go-claude-swap/internal/account"
 	"github.com/blairham/go-claude-swap/internal/paths"
@@ -167,6 +171,11 @@ func (s *Store) Set(dir, email, orgUUID string) (string, *Entry, error) {
 	key, err := NormalizePath(dir)
 	if err != nil {
 		return "", nil, err
+	}
+	// JSON strings are UTF-8: a non-UTF-8 path would be stored with U+FFFD
+	// in it, a key no directory ever normalizes to.
+	if !utf8.ValidString(key) {
+		return "", nil, fmt.Errorf("cannot map %q: mappings.json holds only UTF-8 paths", key)
 	}
 	m, err := s.load()
 	if err != nil {

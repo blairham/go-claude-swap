@@ -1,0 +1,26 @@
+name: Feature request
+description: Something cswap should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like cswap to do?
+      description: The task, not the implementation.
+    validations:
+      required: true
+  - type: dropdown
+    id: part
+    attributes:
+      label: Where?
+      options:
+        - switching or the roster
+        - auto-switch or the service
+        - session mode (cswap run)
+        - TUI
+        - something else
+  - type: textarea
+    id: claude-swap
+    attributes:
+      label: Does the Python claude-swap do this?
+      description: cswap keeps its on-disk formats compatible with claude-swap; say if this would touch them.

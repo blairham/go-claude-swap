@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -33,7 +36,12 @@ func controlSocketLine() string {
 	if !ok {
 		return "Control socket " + paths.SocketPath() + ": no answer (no cswap auto loop is serving it)"
 	}
-	line := fmt.Sprintf("Control socket %s: answering (cswap %s, strategy %s", paths.SocketPath(), st.GetVersion(), st.GetStrategy())
+	line := fmt.Sprintf(
+		"Control socket %s: answering (cswap %s, strategy %s",
+		paths.SocketPath(),
+		st.GetVersion(),
+		st.GetStrategy(),
+	)
 	if st.GetStartedAtUnix() > 0 {
 		line += ", up since " + time.Unix(st.GetStartedAtUnix(), 0).Format(time.RFC3339)
 	}

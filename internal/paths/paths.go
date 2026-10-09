@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package paths resolves Claude Code's config locations and cswap's backup
 // root, mirroring claude-swap's per-OS layout exactly so both tools can
 // coexist on one machine.

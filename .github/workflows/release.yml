@@ -1,0 +1,47 @@
+name: Release
+
+# A v* tag is the release. blairham/.github's go-release.yml runs GoReleaser,
+# which publishes the cswap archives and the Homebrew formula (with its
+# `service` block), signs checksums.txt with keyless cosign, and attests
+# build provenance for every archive. The notes are the tag's CHANGELOG.md
+# section. The signing identity is go-release.yml itself; SECURITY.md shows
+# how to verify it.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.5.0). Must already exist. Leave empty for a dry run."
+        required: false
+        type: string
+      dry-run:
+        description: "Build with GoReleaser --snapshot; publish, sign and attest nothing."
+        required: false
+        type: boolean
+        default: false
+
+# Read-only by default; the release job asks for exactly what it writes.
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Release
+    permissions:
+      contents: write # the GitHub release and its assets
+      id-token: write # keyless cosign and provenance signing
+      attestations: write # store the provenance in the repository's attestations
+    uses: blairham/.github/.github/workflows/go-release.yml@48d6c8f94aa8381c550818e0a0b2a0d61f280a6b # v0.0.2
+    with:
+      tag: ${{ inputs.tag }}
+      snapshot: ${{ inputs.dry-run == true }}
+    secrets:
+      # A token with contents:write on blairham/homebrew-tap.
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+      MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+      MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+      MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+      MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}

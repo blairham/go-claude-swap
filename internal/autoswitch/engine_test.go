@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package autoswitch
 
 import (
@@ -110,12 +113,26 @@ func TestLeastBadHysteresis(t *testing.T) {
 func TestLeastBadOnlyForProactive(t *testing.T) {
 	e := testEngine(t)
 	cands := []candidate{cand(2, hp(0)), cand(5, hp(0))}
-	if trig, ranked := e.selectTargets(triggerAtLimit, cands, nil, hp(0), activeSnap); len(ranked) != 0 || trig != triggerAtLimit {
+	if trig, ranked := e.selectTargets(
+		triggerAtLimit,
+		cands,
+		nil,
+		hp(0),
+		activeSnap,
+	); len(ranked) != 0 ||
+		trig != triggerAtLimit {
 		t.Fatalf("at-limit over exhausted candidates = %q %v, want none", trig, slots(ranked))
 	}
 	e.Strategy = strategyConsumeFirst
 	cands = []candidate{cand(2, hp(50))}
-	if trig, ranked := e.selectTargets(triggerConsumeFirst, cands, nil, hp(30), activeSnap); len(ranked) != 0 || trig != triggerConsumeFirst {
+	if trig, ranked := e.selectTargets(
+		triggerConsumeFirst,
+		cands,
+		nil,
+		hp(30),
+		activeSnap,
+	); len(ranked) != 0 ||
+		trig != triggerConsumeFirst {
 		t.Fatalf("consume-first = %q %v, want none", trig, slots(ranked))
 	}
 }

@@ -1,5 +1,13 @@
-# golangci-lint v2 configuration for go-claude-swap
+# golangci-lint v2 configuration for go-claude-swap.
 # See: https://golangci-lint.run/usage/configuration/
+#
+# Rendered from blairham/.github baseline/golangci.yml.tmpl by `make sync`.
+# Edit the baseline (or, with a reason, the override file
+# overrides/go-claude-swap.yml), not this file: the weekly drift check
+# reports any difference.
+#
+# golangci-lint is pinned twice and the two must move together: go.mod's `tool`
+# block (`go tool golangci-lint`) and the hook `rev` in .pre-commit-config.yaml.
 
 version: "2"
 
@@ -7,6 +15,9 @@ run:
   timeout: 10m
   tests: true
   modules-download-mode: readonly
+  allow-parallel-runners: true
+  # Bounds the footprint: golangci-lint defaults to NumCPU.
+  concurrency: 4
 
 output:
   formats:
@@ -16,97 +27,201 @@ output:
       colors: true
 
 linters:
+  # The hook reports only what a commit introduces, so an older finding surfaces
+  # when its lines are next touched: fix it then rather than adding a disable.
   enable:
-  - errcheck
-  - govet
-  - ineffassign
-  - staticcheck
-  - unused
-  - misspell
-  - unconvert
-  - gocritic
-  - revive
+    # Core linters (enabled by default)
+    - errcheck # Check for unchecked errors
+    - govet # Suspicious constructs; the analyzers are in settings
+    - ineffassign # Detect ineffectual assignments
+    - staticcheck # The staticcheck rule set
+    - unused # Check for unused constants, variables, functions and types
+
+    # Code quality and style
+    - whitespace # Detection of leading and trailing whitespace
+    - unconvert # Remove unnecessary type conversions
+    - unparam # Reports unused function parameters
+    - gocritic # Diagnostic, performance and style checks
+    - goconst # Repeated strings that should be constants
+    - misspell # Commonly misspelled English words (US locale)
+    - revive # Configurable style linter (see settings for the rule set)
+
+    # Bug detection
+    - bodyclose # Check whether HTTP response body is closed
+    - contextcheck # Check if function use a non-inherited context
+    - rowserrcheck # Check whether Err of rows is checked
+    - sqlclosecheck # Check that sql.Rows and sql.Stmt are closed
+    - errname # Checks sentinel errors are prefixed with Err
+    - errorlint # Find code that will cause problems with error wrapping
+    - forcetypeassert # Finds forced type assertions
+    - nilerr # Finds a nil return after a non-nil error check
+    - nilnil # Checks for simultaneous return of nil error and nil value
+    - noctx # Finds HTTP requests without context.Context
+    - predeclared # Find code that shadows predeclared identifiers
+
+    # Performance
+    - prealloc # Finds slice declarations that could be preallocated
+    - sloglint # Ensure consistent code style when using log/slog
+
+    # Security
+    - gosec # Inspects source code for security problems
+
+    # Code complexity
+    - nestif # Reports deeply nested if statements
+    - funlen # Reports overly long functions
+    - gocognit # Reports high cognitive complexity
+    - gocyclo # Reports high cyclomatic complexity
+
+    # Testing
+    - thelper # Detects test helpers not starting with t.Helper()
+    - tparallel # Detects inappropriate usage of t.Parallel()
+    - testableexamples # Checks if examples are testable
+
+    # Import management
+    - importas # Enforces consistent import aliases
+
+    # Interfaces
+    - interfacebloat # Checks the number of methods in an interface
+
+    # Memory
+    - wastedassign # Finds wasted assignment statements
 
   exclusions:
     rules:
-    - path: _test\.go
-      linters:
-      - errcheck
-      - gocritic
-      - revive
+      # Exclude test files from strict checks
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+          - gocritic
+          - funlen
+          - gocognit
+          - gocyclo
+          - nestif
+          - goconst # test fixtures legitimately repeat literals (JSON, expected values)
+          - noctx # httptest.NewRequest et al. are test-only, not real HTTP calls
 
-    - path: cmd/
-      linters:
-      - errcheck
+      # Allow init() in main packages
+      - path: cmd/
+        linters:
+          - gocritic
+        text: "initClause"
 
   settings:
     misspell:
       locale: US
 
-    errcheck:
-      check-type-assertions: false
-      check-blank: false
-      exclude-functions:
-      - os.Setenv
-      - os.Unsetenv
-      - os.Remove
-      - os.RemoveAll
-      - os.MkdirAll
-      - os.WriteFile
-      - (os.File).Close
-      - (*os.File).Close
-      - (io.ReadCloser).Close
-      - (net.Conn).Close
-      - (net.Listener).Close
-      - (*google.golang.org/grpc.ClientConn).Close
-      - (*os/exec.Cmd).Run
-      - syscall.Flock
+    gosec:
+      severity: medium
+      confidence: medium
+      excludes:
+        - G107 # URL provided to HTTP request as taint input
+        - G204 # Subprocess launched with variable
+        - G404 # Weak random number generator
+        - G115 # Integer overflow conversion (safe when values are properly clamped)
 
-    govet:
-      disable:
-      - shadow
+    gocyclo:
+      min-complexity: 15
+
+    gocognit:
+      min-complexity: 20
+
+    nestif:
+      min-complexity: 5
+
+    funlen:
+      lines: 80
+      statements: 50
 
     gocritic:
       enabled-tags:
-      - diagnostic
-      - performance
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
       disabled-checks:
-      - hugeParam
-      - rangeValCopy
-      - ifElseChain
-      - commentedOutCode
-      - appendCombine
+        - hugeParam # Noisy for SDK structs
+        - rangeValCopy # Noisy for SDK structs
+        - unnamedResult # Acceptable in some cases
+        - paramTypeCombine # Explicit types can be clearer
 
     revive:
       severity: warning
       rules:
-      - name: blank-imports
-      - name: context-as-argument
-      - name: error-return
-      - name: error-strings
-      - name: error-naming
-      - name: if-return
-      - name: increment-decrement
-      - name: var-naming
-      - name: var-declaration
-      - name: range
-      - name: receiver-naming
-      - name: unexported-return
-      - name: indent-error-flow
-      - name: errorf
-      - name: superfluous-else
-      - name: unreachable-code
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unused-parameter
+        - name: unreachable-code
+        - name: redefines-builtin-id
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+
+    govet:
+      enable:
+        - atomicalign
+        - fieldalignment
+        - nilness
+        - reflectvaluecompare
+        - shadow
+        - timeformat
+        - unusedwrite
+
+    goconst:
+      min-len: 3
+      min-occurrences: 3
 
 formatters:
   enable:
-  - gofumpt
-  - goimports
+    - gofmt
+    - gofumpt
+    - goimports
+    - gci
+    - golines
 
   settings:
     goimports:
       local-prefixes:
-      - github.com/blairham/go-claude-swap
+        - github.com/blairham/go-claude-swap
+
+    gofumpt:
+      extra:
+        group-params: true
+        clothe-returns: true
+        balance-calls: true
+
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/blairham/go-claude-swap)
+
+    golines:
+      max-len: 120
+      tab-len: 1
 
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
+  new: false

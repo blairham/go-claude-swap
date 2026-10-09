@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package session
 
 import (
@@ -55,7 +58,11 @@ func TestMCPMirror(t *testing.T) {
 	})
 	// A session config elsewhere must not be the source.
 	other := t.TempDir()
-	writeJSON(t, filepath.Join(other, ".claude.json"), map[string]any{"mcpServers": map[string]any{"wrong": map[string]any{}}})
+	writeJSON(
+		t,
+		filepath.Join(other, ".claude.json"),
+		map[string]any{"mcpServers": map[string]any{"wrong": map[string]any{}}},
+	)
 	t.Setenv("CLAUDE_CONFIG_DIR", other)
 	writeJSON(t, filepath.Join(home, ".claude.json"), map[string]any{
 		"mcpServers": map[string]any{"shared": map[string]any{"command": "srv"}, "new": map[string]any{"url": "https://x"}},
@@ -83,7 +90,11 @@ func TestMCPMirror(t *testing.T) {
 	}
 
 	// A deletion upstream propagates; the stash is write-once.
-	writeJSON(t, filepath.Join(home, ".claude.json"), map[string]any{"mcpServers": map[string]any{"new": map[string]any{"url": "https://x"}}})
+	writeJSON(
+		t,
+		filepath.Join(home, ".claude.json"),
+		map[string]any{"mcpServers": map[string]any{"new": map[string]any{"url": "https://x"}}},
+	)
 	syncMCPServers(dir, true)
 	got, _ = json.Marshal(readObject(t, filepath.Join(dir, configFile))["mcpServers"])
 	if string(got) != `{"new":{"url":"https://x"}}` {
@@ -141,7 +152,11 @@ func TestMCPMirrorNeverDestroysTheOnlyCopy(t *testing.T) {
 // is adopted without a stash.
 func TestMCPMirrorAdoptsInSyncProfile(t *testing.T) {
 	home, dir := mcpProfile(t, map[string]any{"s": map[string]any{"command": "x"}})
-	writeJSON(t, filepath.Join(home, ".claude.json"), map[string]any{"mcpServers": map[string]any{"s": map[string]any{"command": "x"}}})
+	writeJSON(
+		t,
+		filepath.Join(home, ".claude.json"),
+		map[string]any{"mcpServers": map[string]any{"s": map[string]any{"command": "x"}}},
+	)
 	if notes := syncMCPServers(dir, true); len(notes) != 0 {
 		t.Fatalf("notes = %v", notes)
 	}

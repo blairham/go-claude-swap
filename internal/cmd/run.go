@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -29,8 +32,8 @@ type RunCommand struct {
 
 // RunFlags for cswap run.
 type RunFlags struct {
-	NoShare        bool `long:"no-share" description:"Don't share ~/.claude customizations into the session profile"`
-	ShareHistory   bool `long:"share-history" description:"Share ~/.claude conversation history (projects/, history.jsonl) with the session"`
+	NoShare        bool `long:"no-share"        description:"Don't share ~/.claude customizations into the session profile"`
+	ShareHistory   bool `long:"share-history"   description:"Share ~/.claude conversation history (projects/, history.jsonl) with the session"`
 	RequireSession bool `long:"require-session" description:"Refuse to launch on the default login"`
 }
 
@@ -94,12 +97,16 @@ func (c *RunCommand) Run(args []string) int {
 		return code
 	}
 	if len(remaining) > 1 {
-		c.UI.Error("Error: unexpected arguments " + strings.Join(remaining[1:], " ") + " (pass claude's own arguments after --)")
+		c.UI.Error(
+			"Error: unexpected arguments " + strings.Join(remaining[1:], " ") + " (pass claude's own arguments after --)",
+		)
 		return 1
 	}
 
 	if opts.ShareHistory && runtime.GOOS == "windows" {
-		c.UI.Error("Error: --share-history is not supported on Windows yet: sharing uses re-synced copies there, which would fork the history instead of sharing it.")
+		c.UI.Error(
+			"Error: --share-history is not supported on Windows yet: sharing uses re-synced copies there, which would fork the history instead of sharing it.",
+		)
 		return 1
 	}
 
@@ -153,7 +160,12 @@ func (c *RunCommand) Run(args []string) int {
 		}
 	}
 	if len(scrubbed) > 0 {
-		c.UI.Warn(fmt.Sprintf("Ignoring %s for this session — it would override the selected account inside Claude Code.", strings.Join(scrubbed, ", ")))
+		c.UI.Warn(
+			fmt.Sprintf(
+				"Ignoring %s for this session — it would override the selected account inside Claude Code.",
+				strings.Join(scrubbed, ", "),
+			),
+		)
 	}
 	c.UI.Output(fmt.Sprintf("Launching Account-%d (%s) [session mode]", plan.Slot, plan.Email))
 	env := append(session.ScrubbedEnv(os.Environ()), "CLAUDE_CONFIG_DIR="+plan.Dir)

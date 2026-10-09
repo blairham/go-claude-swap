@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -9,6 +10,7 @@ import (
 	"github.com/hashicorp/cli"
 
 	"github.com/blairham/go-claude-swap/internal/autoswitch"
+	"github.com/blairham/go-claude-swap/internal/logfile"
 	"github.com/blairham/go-claude-swap/internal/paths"
 	"github.com/blairham/go-claude-swap/pkg/swapapi"
 )
@@ -28,6 +30,8 @@ type AutoFlags struct {
 	Cooldown  float64 `long:"cooldown" description:"Minimum seconds between proactive switches"`
 	Strategy  string  `long:"strategy" choice:"best" choice:"consume-first" description:"Target selection strategy"`
 	Model     string  `long:"model" description:"Comma-separated model display names, 'auto', 'all', or 'none'"`
+	LogFile   string  `long:"log-file" description:"Append events to this file, rotated by size, instead of stdout"`
+	Verbose   bool    `long:"verbose" description:"Log every poll, not only changes and an hourly heartbeat"`
 }
 
 // Help text.
@@ -52,6 +56,12 @@ Options:
       --strategy NAME    best | consume-first
       --model NAMES      Model weekly limits to watch: names (Fable,Opus),
                          auto (Claude Code's model), all, or none
+      --log-file PATH    Write events to PATH instead of stdout, rotating it
+                         at 10 MiB and keeping 3 old files (PATH.1 .. PATH.3).
+                         Stdout and stderr are redirected there too, so the
+                         path a service manager logs to can be passed here
+      --verbose          In loop mode, log every poll; by default an
+                         unchanged poll is logged only once an hour
 `
 }
 
@@ -86,11 +96,28 @@ func (c *AutoCommand) Run(args []string) int {
 	}
 	cfg.DryRun = opts.DryRun
 
+	out := io.Writer(os.Stdout)
+	if opts.LogFile != "" {
+		lf, err := logfile.Open(opts.LogFile, 0, 0, logfile.RedirectStdio)
+		if err != nil {
+			c.UI.Error("Error: opening log file: " + err.Error())
+			return 1
+		}
+		defer lf.Close()
+		out = lf
+	}
+
 	var sink autoswitch.EventSink
 	if opts.JSON {
-		sink = autoswitch.NewJSONSink(os.Stdout)
+		sink = autoswitch.NewJSONSink(out)
 	} else {
-		sink = autoswitch.NewHumanSink(os.Stdout)
+		sink = autoswitch.NewHumanSink(out)
+		// A long-running loop's log is mostly identical below-threshold
+		// ticks; keep only the ones that say something new. JSONL stays
+		// complete: its consumers may treat every poll as a liveness tick.
+		if !opts.Once && !opts.Verbose {
+			sink = autoswitch.NewQuietSink(sink, autoswitch.DefaultHeartbeat)
+		}
 	}
 
 	if opts.Once {

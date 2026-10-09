@@ -11,6 +11,7 @@ func TestRenderPlist(t *testing.T) {
 		"<string>" + Label + "</string>",
 		"<string>/usr/local/bin/cswap</string>",
 		"<string>auto</string>",
+		"<string>--log-file</string>",
 		"<string>--threshold</string>",
 		"<string>85</string>",
 		"<key>RunAtLoad</key>",

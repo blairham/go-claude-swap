@@ -38,8 +38,9 @@ func EngineRunning() bool {
 // Run ticks forever until ctx is canceled, then returns nil. Normal ticks
 // are spaced by the configured interval with ±10% jitter; a Blocked tick
 // with a known recovery instant sleeps until just past that reset (never
-// beyond 10 minutes), and any other Blocked tick backs off to at least 5
-// minutes. A sleep event is emitted whenever the delay exceeds 1.5×interval.
+// beyond 10 minutes), a Blocked tick whose active account is already past
+// the threshold keeps the normal interval, and any other Blocked tick backs
+// off to at least 5 minutes. A sleep event is emitted whenever the delay exceeds 1.5×interval.
 func (e *Engine) Run(ctx context.Context) error {
 	// Hold the presence marker for the loop's lifetime so TUIs go
 	// store-only instead of double-spending the usage request budget.
@@ -50,9 +51,9 @@ func (e *Engine) Run(ctx context.Context) error {
 		defer marker.Release()
 	}
 	for {
-		outcome, blockedReset := e.tick()
+		res := e.tick()
 		now := time.Now()
-		delay := e.delayAfter(outcome, blockedReset, now)
+		delay := e.delayAfter(res, now)
 		if delay > 1.5*e.Interval {
 			until := now.Add(time.Duration(delay * float64(time.Second)))
 			e.emit("sleep", map[string]any{
@@ -75,15 +76,14 @@ func (e *Engine) Run(ctx context.Context) error {
 // RunOnce performs a single tick; the Outcome doubles as the `--once` exit
 // code.
 func (e *Engine) RunOnce() Outcome {
-	outcome, _ := e.tick()
-	return outcome
+	return e.tick().outcome
 }
 
 // delayAfter computes the next sleep in seconds.
-func (e *Engine) delayAfter(outcome Outcome, blockedReset int64, now time.Time) float64 {
-	if outcome == OutcomeBlocked {
-		if blockedReset > 0 {
-			d := float64(blockedReset+60) - float64(now.Unix())
+func (e *Engine) delayAfter(res tickResult, now time.Time) float64 {
+	if res.outcome == OutcomeBlocked && !res.pressing {
+		if res.recoverAt > 0 {
+			d := float64(res.recoverAt+60) - float64(now.Unix())
 			return math.Min(math.Max(d, e.Interval), 600)
 		}
 		return math.Max(e.Interval, 300)

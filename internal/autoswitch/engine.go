@@ -32,6 +32,10 @@ const (
 	triggerAtLimit      = "at-limit"
 	triggerFailover     = "failover"
 	triggerConsumeFirst = "consume-first"
+	// triggerLeastBad: the active account is past the threshold, no
+	// candidate is healthy, and one has clearly more headroom — move to it
+	// now rather than riding the active account to 100%.
+	triggerLeastBad = "least-bad"
 )
 
 // freshenLead plus oauth.ExpiryBuffer gives the 10-minute pre-switch
@@ -147,21 +151,34 @@ type candidate struct {
 	reset    int64 // 7d reset epoch, filled for consume-first ranking
 }
 
-// tick runs one decision cycle. The second return is the earliest recovery
-// epoch when the outcome is Blocked because every account is exhausted (0
-// otherwise); the runner uses it to sleep until just past the reset.
-func (e *Engine) tick() (Outcome, int64) {
+// tickResult is what one decision cycle tells the runner about pacing.
+type tickResult struct {
+	outcome Outcome
+	// recoverAt is the earliest recovery epoch when the outcome is Blocked
+	// because every account is exhausted (0 otherwise); the runner sleeps
+	// until just past it.
+	recoverAt int64
+	// pressing marks a Blocked tick whose active account is already past
+	// the threshold: the runner must keep polling at the normal interval
+	// instead of backing off, or the active account runs to 100% unwatched.
+	pressing bool
+}
+
+func result(o Outcome) tickResult { return tickResult{outcome: o} }
+
+// tick runs one decision cycle.
+func (e *Engine) tick() tickResult {
 	// Re-resolve "auto" every tick: the model Claude Code uses (and with it
 	// which per-model weekly window binds, e.g. Fable's) can change mid-run.
 	e.models = settings.ResolveModelNames(e.Models)
 	if err := paths.EnsureDirs(); err != nil {
 		e.errorEvent("preparing backup dirs: "+err.Error(), false)
-		return OutcomeError, 0
+		return result(OutcomeError)
 	}
 	seq, err := account.Load()
 	if err != nil {
 		e.errorEvent(err.Error(), false)
-		return OutcomeError, 0
+		return result(OutcomeError)
 	}
 	e.releaseStaleQuarantines(seq)
 	st := loadState()
@@ -187,46 +204,62 @@ func (e *Engine) tick() (Outcome, int64) {
 	e.emitPoll(active, snaps, head)
 	if active == nil {
 		e.noSwitch("no-active-account", "")
-		return OutcomeNoAction, 0
+		return result(OutcomeNoAction)
 	}
 	if active.Status == switcher.StatusAPIKey && !e.IncludeAPIKey {
 		e.noSwitch("active-api-key", "")
-		return OutcomeNoAction, 0
+		return result(OutcomeNoAction)
 	}
 
 	activeH := head[strconv.Itoa(active.Slot)]
 	trigger, out, done := e.decideTrigger(activeH)
 	if done {
-		return out, 0
+		return result(out)
 	}
 
 	if proactiveLike(trigger) {
 		if rem := e.cooldownRemaining(st, time.Now()); rem > 0 {
 			e.noSwitch("cooldown", fmt.Sprintf("%ds remaining", int(math.Ceil(rem))))
-			return OutcomeNoAction, 0
+			return result(OutcomeNoAction)
 		}
 	}
 
 	oauthCands, apiCands := e.candidates(snaps, st, active.Slot, head)
 	if len(oauthCands)+len(apiCands) == 0 {
 		e.noSwitch("no-candidates", "")
-		return OutcomeBlocked, 0
+		return result(OutcomeBlocked)
 	}
 
+	trigger, ranked := e.selectTargets(trigger, oauthCands, apiCands, activeH, active)
+	if len(ranked) == 0 {
+		return e.blockedOutcome(trigger, active, activeH, oauthCands)
+	}
+	return result(e.performSwitch(trigger, active, activeH, ranked))
+}
+
+// selectTargets orders the switch targets for this tick, possibly
+// re-classifying the trigger. An empty result means the tick is blocked.
+func (e *Engine) selectTargets(
+	trigger string, oauthCands, apiCands []candidate, activeH *float64, active *switcher.Snapshot,
+) (string, []candidate) {
 	ranked := e.rank(trigger, oauthCands, activeH, active)
 	if len(ranked) == 0 && trigger != triggerConsumeFirst {
 		// API-key accounts have no usage windows to rank; they are the
 		// fallback when no measurable OAuth account qualifies.
 		ranked = apiCands
 	}
-	if len(ranked) == 0 {
-		return e.blockedOutcome(active, activeH, oauthCands)
+	if len(ranked) == 0 && trigger == triggerProactive {
+		if lb := e.leastBad(oauthCands, activeH); len(lb) > 0 {
+			return triggerLeastBad, lb
+		}
 	}
-	return e.performSwitch(trigger, active, activeH, ranked), 0
+	return trigger, ranked
 }
 
+// proactiveLike triggers are discretionary — the active account still
+// works — so they honor the cooldown.
 func proactiveLike(trigger string) bool {
-	return trigger == triggerProactive || trigger == triggerConsumeFirst
+	return trigger == triggerProactive || trigger == triggerConsumeFirst || trigger == triggerLeastBad
 }
 
 // decideTrigger classifies the active account. done=true means the tick is
@@ -343,6 +376,37 @@ func (e *Engine) rank(trigger string, cands []candidate, activeH *float64, activ
 	return out
 }
 
+// leastBad ranks the fallback targets once the active account is past the
+// threshold and nothing healthy qualifies: any measured, non-exhausted
+// candidate with clearly more headroom than the active account, best first.
+//
+// "Clearly" is the hysteresis margin, shrunk to half the active account's
+// remaining headroom. At full hysteresis the path could never fire before
+// the active account hit 100% (a candidate would need headroom of at least
+// threshold-room + hysteresis, which already qualifies it as healthy); the
+// shrinking margin makes the move more eager the closer the wall is. It
+// still cannot ping-pong: moving back needs the new account to burn twice
+// the margin first, and the cooldown applies.
+func (e *Engine) leastBad(cands []candidate, activeH *float64) []candidate {
+	if activeH == nil || *activeH <= 0 {
+		return nil
+	}
+	margin := math.Min(e.Hysteresis, *activeH/2)
+	var out []candidate
+	for _, c := range cands {
+		if c.headroom == nil || *c.headroom <= 0 {
+			continue
+		}
+		gain := *c.headroom - *activeH
+		if gain <= 0 || gain < margin {
+			continue
+		}
+		out = append(out, c)
+	}
+	sortByHeadroomDesc(out)
+	return out
+}
+
 func sortByHeadroomDesc(cands []candidate) {
 	sort.SliceStable(cands, func(i, j int) bool {
 		if *cands[i].headroom != *cands[j].headroom {
@@ -362,7 +426,9 @@ func sevenDayReset(u *usage.Usage) int64 {
 
 // blockedOutcome classifies an empty ranking: everything exhausted (with a
 // recovery hint for the runner), nothing measurable, or nothing qualifying.
-func (e *Engine) blockedOutcome(active *switcher.Snapshot, activeH *float64, cands []candidate) (Outcome, int64) {
+// A proactive trigger means the active account is past the threshold, so a
+// nothing-qualifies result is marked pressing: the runner keeps polling.
+func (e *Engine) blockedOutcome(trigger string, active *switcher.Snapshot, activeH *float64, cands []candidate) tickResult {
 	measured, exhausted := 0, 0
 	for _, c := range cands {
 		if c.headroom == nil {
@@ -380,14 +446,15 @@ func (e *Engine) blockedOutcome(active *switcher.Snapshot, activeH *float64, can
 			fields["earliestResetAt"] = time.Unix(earliest, 0).UTC().Format(account.TimeFormat)
 		}
 		e.emit("all-exhausted", fields)
-		return OutcomeBlocked, earliest
+		return tickResult{outcome: OutcomeBlocked, recoverAt: earliest}
 	}
+	pressing := trigger == triggerProactive
 	if measured == 0 {
 		e.noSwitch("no-comparison", "")
-		return OutcomeBlocked, 0
+		return tickResult{outcome: OutcomeBlocked, pressing: pressing}
 	}
 	e.noSwitch("no-qualifying-candidate", "")
-	return OutcomeBlocked, 0
+	return tickResult{outcome: OutcomeBlocked, pressing: pressing}
 }
 
 // earliestRecovery is the soonest instant any exhausted account (active

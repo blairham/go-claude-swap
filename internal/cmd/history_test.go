@@ -44,7 +44,8 @@ func TestParseSince(t *testing.T) {
 
 func TestHistoryCommandJSON(t *testing.T) {
 	historyEnv(t)
-	now := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
+	// Far from the real clock, so --since must be measured from c.Now.
+	now := time.Date(2020, 3, 8, 12, 0, 0, 0, time.UTC)
 	for i, ago := range []time.Duration{72 * time.Hour, 3 * time.Hour, 2 * time.Hour, time.Hour} {
 		util := float64(90 + i)
 		if err := history.Append(history.Record{

@@ -98,6 +98,9 @@ type Engine struct {
 	unhealthy int           // consecutive ticks with unknown active headroom
 	wakeCh    chan struct{} // Wake() requests an immediate tick
 	models    []string      // Config.Models with sentinels resolved, per tick
+	// activeCause is why this tick's active headroom is unknown ("" when
+	// known), set by emitPoll so the no-switch line can say it too.
+	activeCause string
 }
 
 // NewEngine builds an Engine over cfg and sink, emitting a config-warning
@@ -268,7 +271,11 @@ func (e *Engine) decideTrigger(activeH *float64) (trigger string, out Outcome, d
 	if activeH == nil {
 		e.unhealthy++
 		if e.unhealthy < e.UnhealthyTicks {
-			e.noSwitch("active-usage-unknown", fmt.Sprintf("%d/%d before failover", e.unhealthy, e.UnhealthyTicks))
+			detail := fmt.Sprintf("%d/%d before failover", e.unhealthy, e.UnhealthyTicks)
+			if e.activeCause != "" {
+				detail += "; " + e.activeCause
+			}
+			e.noSwitch("active-usage-unknown", detail)
 			return "", OutcomeNoAction, true
 		}
 		return triggerFailover, 0, false
@@ -691,10 +698,20 @@ func (e *Engine) emitPoll(active *switcher.Snapshot, snaps []switcher.Snapshot, 
 		fields["active"] = nil
 	}
 	fetchErrors := map[string]string{}
+	unknown := map[string]string{}
 	windows := map[string]map[string]float64{}
+	e.activeCause = ""
 	for i := range snaps {
 		s := &snaps[i]
 		key := strconv.Itoa(s.Slot)
+		if head[key] == nil {
+			if cause := unknownCause(s, e.models); cause != "" {
+				unknown[key] = cause
+				if s == active {
+					e.activeCause = cause
+				}
+			}
+		}
 		if s.Usage != nil {
 			wm := map[string]float64{}
 			for _, w := range s.Usage.RelevantWindows(e.models) {
@@ -709,6 +726,9 @@ func (e *Engine) emitPoll(active *switcher.Snapshot, snaps []switcher.Snapshot, 
 	}
 	if len(fetchErrors) > 0 {
 		fields["fetchErrors"] = fetchErrors
+	}
+	if len(unknown) > 0 {
+		fields["usageUnknown"] = unknown
 	}
 	if len(windows) > 0 {
 		fields["windowsPct"] = windows

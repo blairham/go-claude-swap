@@ -81,6 +81,11 @@ func (e Event) humanPoll() string {
 			used = formatNum(100-*h) + "% used"
 		}
 	}
+	if causes, ok := e.Fields["usageUnknown"].(map[string]string); ok && used == "usage unknown" {
+		if cause := causes[strconv.Itoa(num)]; cause != "" {
+			used += " (" + cause + ")"
+		}
+	}
 	line := fmt.Sprintf("Account-%d (%s): %s (switch at %s%%)", num, email, used, formatNum(e.flt("threshold")))
 	if others := e.pollOthers(num); others != "" {
 		line += " | others: " + others

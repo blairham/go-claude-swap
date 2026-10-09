@@ -553,7 +553,7 @@ func (e *Engine) commitSwitch(trigger string, active *switcher.Snapshot, activeH
 		}
 	}
 
-	res, err := switcher.SwitchTo(strconv.Itoa(c.slot), false)
+	res, err := switcher.SwitchToFrom(strconv.Itoa(c.slot), false, e.switchOrigin(trigger, activeH))
 	if err != nil {
 		e.errorEvent("switch failed: "+err.Error(), true)
 		return OutcomeError
@@ -589,6 +589,26 @@ func (e *Engine) commitSwitch(trigger string, active *switcher.Snapshot, activeH
 		"toEmail": c.acct.Email, "warnings": warnings, "dryRun": false,
 	})
 	return OutcomeSwitched
+}
+
+// switchOrigin describes an auto switch for the history record.
+func (e *Engine) switchOrigin(trigger string, activeH *float64) switcher.Origin {
+	o := switcher.Origin{Trigger: trigger, Source: "auto"}
+	if activeH == nil {
+		o.Reason = "active account usage unknown"
+		return o
+	}
+	util := 100 - *activeH
+	o.ActiveUtilizationPct = &util
+	switch trigger {
+	case triggerAtLimit:
+		o.Reason = "active account at its limit"
+	case triggerConsumeFirst:
+		o.Reason = "consume-first: target resets sooner"
+	default:
+		o.Reason = fmt.Sprintf("active at %s%% (threshold %s%%)", formatNum(util), formatNum(e.Threshold))
+	}
+	return o
 }
 
 // cooldownRemaining returns the seconds left in the proactive cooldown, 0

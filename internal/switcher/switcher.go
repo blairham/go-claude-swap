@@ -21,10 +21,12 @@ import (
 	"github.com/blairham/go-claude-swap/internal/account"
 	"github.com/blairham/go-claude-swap/internal/claudecfg"
 	"github.com/blairham/go-claude-swap/internal/credentials"
+	"github.com/blairham/go-claude-swap/internal/history"
 	"github.com/blairham/go-claude-swap/internal/locks"
 	"github.com/blairham/go-claude-swap/internal/mappings"
 	"github.com/blairham/go-claude-swap/internal/oauth"
 	"github.com/blairham/go-claude-swap/internal/paths"
+	"github.com/blairham/go-claude-swap/internal/settings"
 	"github.com/blairham/go-claude-swap/internal/usage"
 )
 
@@ -155,9 +157,26 @@ func aliasConflict(seq *account.Sequence, alias, email, orgUUID string) string {
 	return ""
 }
 
-// SwitchTo activates the account matching selector. force skips the
-// already-active guard and the backup of the outgoing account.
+// Origin says why a switch is happening; it is what the switch history
+// records beside the from/to pair.
+type Origin struct {
+	Trigger string // manual, rotate, or an autoswitch trigger
+	Source  string // cli, tui, auto
+	Reason  string
+	// ActiveUtilizationPct is the outgoing account's binding utilization.
+	// nil means the switcher fills it from the usage cache when it can.
+	ActiveUtilizationPct *float64
+}
+
+// SwitchTo activates the account matching selector, recording it as a
+// manual switch from the CLI. force skips the already-active guard and the
+// backup of the outgoing account.
 func SwitchTo(selector string, force bool) (*Result, error) {
+	return SwitchToFrom(selector, force, Origin{Trigger: "manual", Source: "cli"})
+}
+
+// SwitchToFrom is SwitchTo with an explicit origin for the history record.
+func SwitchToFrom(selector string, force bool, origin Origin) (*Result, error) {
 	seq, err := account.Load()
 	if err != nil {
 		return nil, err
@@ -166,11 +185,12 @@ func SwitchTo(selector string, force bool) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	return performSwitch(seq, target, force)
+	return performSwitch(seq, target, force, origin)
 }
 
 // Rotate advances to the next switchable account in sequence order.
 func Rotate() (*Result, error) {
+	origin := Origin{Trigger: "rotate", Source: "cli"}
 	seq, err := account.Load()
 	if err != nil {
 		return nil, err
@@ -200,7 +220,7 @@ func Rotate() (*Result, error) {
 			warnings = append(warnings, fmt.Sprintf("Skipped Account-%d (no stored credentials/config)", slot))
 			continue
 		}
-		res, serr := performSwitch(seq, slot, false)
+		res, serr := performSwitch(seq, slot, false, origin)
 		if serr != nil {
 			if errors.Is(serr, oauth.ErrPermanent) {
 				warnings = append(warnings, fmt.Sprintf("Skipped Account-%d: %v", slot, serr))
@@ -236,7 +256,7 @@ func Switchable(slot int, a *account.Account) bool {
 // performSwitch is the locked core. It re-reads the roster under the lock,
 // classifies and preserves the outgoing credential, activates the target,
 // and rolls back on failure.
-func performSwitch(seq *account.Sequence, target int, force bool) (*Result, error) {
+func performSwitch(seq *account.Sequence, target int, force bool, origin Origin) (*Result, error) {
 	targetAcct := seq.Get(target)
 	if targetAcct == nil {
 		return nil, fmt.Errorf("no account in slot %d", target)
@@ -406,7 +426,55 @@ func performSwitch(seq *account.Sequence, target int, force bool) (*Result, erro
 
 	res.Switched = true
 	res.Reason = "switched"
+
+	// Still under cswap's lock, which is what serializes history writers. A
+	// failed record never undoes a completed switch; it only warns.
+	if err := recordHistory(seq, res, origin); err != nil {
+		res.Warnings = append(res.Warnings, fmt.Sprintf("could not record switch history: %v", err))
+	}
 	return res, nil
+}
+
+// recordHistory appends the completed switch to the history file, filling
+// the outgoing account's utilization from the usage cache when the caller
+// did not supply it.
+func recordHistory(seq *account.Sequence, res *Result, origin Origin) error {
+	rec := history.Record{
+		To:                   history.Ref{Number: res.ToSlot, Email: res.ToEmail},
+		Trigger:              origin.Trigger,
+		Source:               origin.Source,
+		Reason:               origin.Reason,
+		ActiveUtilizationPct: origin.ActiveUtilizationPct,
+	}
+	if res.FromSlot != 0 || res.FromEmail != "" {
+		rec.From = &history.Ref{Number: res.FromSlot, Email: res.FromEmail}
+	}
+	if rec.ActiveUtilizationPct == nil {
+		rec.ActiveUtilizationPct = cachedUtilization(seq, res.FromSlot)
+	}
+	return history.Append(rec)
+}
+
+// cachedUtilization is the outgoing slot's binding utilization from the
+// usage cache, nil when the cache has no decision-trusted row for it. It
+// never fetches: the usage request budget belongs to the scheduler.
+func cachedUtilization(seq *account.Sequence, slot int) *float64 {
+	a := seq.Get(slot)
+	if a == nil {
+		return nil
+	}
+	now := time.Now()
+	models := settings.ResolveModelNames(settings.Load().Models())
+	u := usage.LoadStore().Get(slot, a.Email, a.OrganizationUUID).DecisionValue(now, models)
+	if u == nil {
+		return nil
+	}
+	h, ok := u.Headroom(models)
+	if !ok {
+		return nil
+	}
+	util := 100 - h
+	return &util
 }
 
 // backupOutgoing classifies the live credential against the outgoing slot

@@ -77,6 +77,9 @@ func CommandFactory() map[string]cli.CommandFactory {
 		"import": func() (cli.Command, error) {
 			return &ImportCommand{UI: ui}, nil
 		},
+		"history": func() (cli.Command, error) {
+			return &HistoryCommand{UI: ui}, nil
+		},
 		"unclaimed": func() (cli.Command, error) {
 			return &UnclaimedCommand{UI: ui}, nil
 		},

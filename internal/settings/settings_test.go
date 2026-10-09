@@ -129,3 +129,25 @@ func TestModelsDefaultIsAuto(t *testing.T) {
 		t.Errorf("Models() default = %v, want [auto]", got)
 	}
 }
+
+func TestNotifySetting(t *testing.T) {
+	withBackupRoot(t)
+	if got := Load().String("autoswitch.notify"); got != "important" {
+		t.Errorf("notify default = %q", got)
+	}
+	if _, err := ParseStrict("autoswitch.notify", "loud"); err == nil {
+		t.Error("notify accepted an unknown level")
+	}
+	for _, level := range []string{"off", "important", "all"} {
+		v, err := ParseStrict("autoswitch.notify", level)
+		if err != nil {
+			t.Fatalf("%s: %v", level, err)
+		}
+		if err := SetKey("autoswitch.notify", v); err != nil {
+			t.Fatal(err)
+		}
+		if got := Load().String("autoswitch.notify"); got != level {
+			t.Errorf("notify = %q, want %q", got, level)
+		}
+	}
+}

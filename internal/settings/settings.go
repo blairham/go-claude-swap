@@ -79,6 +79,10 @@ var Registry = []Spec{
 		Help: "Model weekly limits to also switch on: auto (follow Claude Code's model), names (e.g. Fable,Opus), all, or none",
 	},
 	{
+		Key: "autoswitch.notify", Kind: KindChoice, Choices: []string{"off", "important", "all"}, Default: "important",
+		Help: "Desktop notifications from cswap auto: important (at-limit, failover, all exhausted, recovery), all (every switch too), or off",
+	},
+	{
 		Key: "ui.theme", Kind: KindChoice, Choices: []string{"dark", "light", "auto"}, Default: "auto",
 		Help: "Color theme; auto follows the terminal background",
 	},

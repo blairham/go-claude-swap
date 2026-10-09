@@ -72,6 +72,7 @@ cswap service install         # any install: launchd (macOS) / systemd --user (L
 | `cswap export` / `import` | Back up or migrate accounts between machines |
 | `cswap config [list\|get\|set\|unset\|path]` | Settings (threshold, strategy, cooldown, theme, …) |
 | `cswap unclaimed` | Credentials preserved from displaced logins |
+| `cswap run [N\|alias\|email] [--no-share] [--require-session] [-- ARGS]` | Run Claude Code as an account in this terminal only, in its own profile; bare `run` uses the directory's mapping |
 | `cswap map [N\|alias\|email [PATH]]` / `unmap [PATH]` | Map a directory (and everything below it) to an account; bare `map` lists mappings. Shared with the Python claude-swap via `mappings.json` |
 | `cswap history [--since 7d] [--limit N] [--json]` | Recorded switches — manual and automatic — with trigger, utilization, and reason |
 
@@ -104,6 +105,15 @@ JSONL events.
   when you're on Fable and an account's Fable weekly window fills up, the
   rotation lands on the account with the most Fable headroom left, even if
   the exhausted account's overall 7d window still looks healthy.
+- **Session mode**: `cswap run N` launches Claude Code with
+  `CLAUDE_CONFIG_DIR` pointing at a persistent per-account profile under
+  `<backup root>/sessions/`, so one terminal runs as account N while the
+  default login is untouched. Profiles are seeded from the account's backup,
+  reused while `claude auth status` vouches for them, and kept coherent with
+  the backup in both directions: a re-login or refresh invalidates a
+  profile (or flags it while it is running), and a token Claude Code rotated
+  inside a quiescent profile is adopted back into the backup before cswap
+  would otherwise switch to, refresh, or poll with the older generation.
 - **Service ⟷ TUI over gRPC**: a looping `cswap auto` serves a control API
   (`pkg/swapapi`) on a unix socket in the backup root. The TUI connects to
   it for status, streams switch events live, and goes store-only while the
@@ -140,9 +150,9 @@ cswap config set ui.theme light
 
 ## Not (yet) ported
 
-Session mode (`cswap run`), the macOS menubar extra, and the deepest
-edge-case machinery of the original (consume-gate CAS persistence,
-provenance oracle probing).
+The macOS menubar extra, and the deepest edge-case machinery of the original
+(consume-gate CAS persistence, provenance oracle probing). Session mode does
+not yet mirror `mcpServers` into profiles or offer `--share-history`.
 
 ## Development
 

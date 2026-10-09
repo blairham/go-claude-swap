@@ -3,7 +3,10 @@ package account
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/blairham/go-claude-swap/internal/paths"
 )
 
 func withHome(t *testing.T) string {
@@ -120,5 +123,38 @@ func TestRemoveClearsActivePointer(t *testing.T) {
 	seq.Remove(1)
 	if seq.ActiveAccountNumber != nil || len(seq.Order) != 0 {
 		t.Errorf("remove left state: %+v", seq)
+	}
+}
+
+// TestKindSurvivesRewrite: claude-swap marks API-key rows with "kind";
+// a roster rewrite here must not drop it, or the original would start
+// treating the API key as an OAuth account.
+func TestKindSurvivesRewrite(t *testing.T) {
+	withHome(t)
+	os.MkdirAll(filepath.Dir(paths.SequencePath()), 0o700)
+	py := `{
+  "activeAccountNumber": null,
+  "lastUpdated": "2026-01-01T00:00:00Z",
+  "sequence": [1],
+  "accounts": {
+    "1": {"email": "api-key-1@token.local", "uuid": "", "organizationUuid": "", "organizationName": "", "added": "2026-01-01T00:00:00Z", "kind": "api_key"}
+  }
+}`
+	if err := os.WriteFile(paths.SequencePath(), []byte(py), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	seq, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seq.Get(1).Kind != KindAPIKey {
+		t.Fatalf("kind not read: %+v", seq.Get(1))
+	}
+	if err := seq.Save(); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(paths.SequencePath())
+	if !strings.Contains(string(raw), `"kind": "api_key"`) {
+		t.Fatalf("kind dropped on rewrite: %s", raw)
 	}
 }

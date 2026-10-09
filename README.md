@@ -60,6 +60,7 @@ cswap service install         # any install: launchd (macOS) / systemd --user (L
 | Command | Description |
 |---|---|
 | `cswap add [--slot N] [--alias NAME]` | Back up the current Claude Code login as a managed account |
+| `cswap add-token [--slot N] [--email E] [TOKEN\|-]` | Register an account from a `claude setup-token` token or an `sk-ant-api…` key, without a login on this machine |
 | `cswap login [N\|alias\|email]` / `relogin` | Re-authenticate an account (or add one) via the OAuth flow, without touching the live session |
 | `cswap list` / `ls` | All accounts with 5h/7d/per-model usage and reset times |
 | `cswap status` | Current account |
@@ -125,9 +126,9 @@ cswap config set ui.theme light
 
 ## Not (yet) ported
 
-Session mode (`cswap run`), setup-token accounts (`add-token`), the macOS
-menubar extra, and the deepest edge-case machinery of the original
-(consume-gate CAS persistence, provenance oracle probing).
+Session mode (`cswap run`), the macOS menubar extra, and the deepest
+edge-case machinery of the original (consume-gate CAS persistence,
+provenance oracle probing).
 
 ## Development
 

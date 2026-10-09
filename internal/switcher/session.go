@@ -36,8 +36,12 @@ type SessionPlan struct {
 
 // SessionOptions tune PrepareSession.
 type SessionOptions struct {
-	// Share mirrors ~/.claude customizations into the profile.
+	// Share mirrors ~/.claude customizations (and user-scope MCP servers)
+	// into the profile.
 	Share bool
+	// ShareHistory links ~/.claude's conversation history into the profile,
+	// merging the profile's own history into ~/.claude first.
+	ShareHistory bool
 	// RequireSession refuses the Direct fast path instead of taking it.
 	RequireSession bool
 }
@@ -76,7 +80,7 @@ func PrepareSession(selector string, opts SessionOptions) (*SessionPlan, error) 
 
 	dir := session.Dir(slot, a.Email)
 	plan.Dir = dir
-	share := func() { plan.Notes = append(plan.Notes, session.SyncSharing(dir, opts.Share)...) }
+	share := func() { plan.Notes = append(plan.Notes, session.SyncSharing(dir, opts.Share, opts.ShareHistory)...) }
 
 	// Deferred invalidation: the backup moved while this profile was live.
 	// Honored only once nothing runs in it.

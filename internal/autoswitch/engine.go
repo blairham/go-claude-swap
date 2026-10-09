@@ -170,10 +170,12 @@ type tickResult struct {
 	// because every account is exhausted (0 otherwise); the runner sleeps
 	// until just past it.
 	recoverAt int64
-	// pressing marks a Blocked tick whose active account is already past
-	// the threshold: the runner must keep polling at the normal interval
-	// instead of backing off, or the active account runs to 100% unwatched.
-	pressing bool
+	// keepPolling marks a Blocked tick whose active account still has
+	// headroom: the runner keeps the normal interval instead of backing off.
+	// Past the threshold, backing off lets the active account run to 100%
+	// unwatched; below it, backing off delays the threshold check and the
+	// burn-rate projection. See blockedPacing.
+	keepPolling bool
 }
 
 func result(o Outcome) tickResult { return tickResult{outcome: o} }
@@ -238,8 +240,7 @@ func (e *Engine) tick() tickResult {
 
 	oauthCands, apiCands := e.candidates(snaps, st, active.Slot, head)
 	if len(oauthCands)+len(apiCands) == 0 {
-		e.noSwitch("no-candidates", "")
-		return result(OutcomeBlocked)
+		return e.noCandidates(trigger)
 	}
 
 	trigger, ranked := e.selectTargets(trigger, oauthCands, apiCands, activeH, active)
@@ -247,6 +248,13 @@ func (e *Engine) tick() tickResult {
 		return e.nothingRanked(trigger, active, activeH, oauthCands, time.Now())
 	}
 	return result(e.performSwitch(trigger, active, activeH, ranked))
+}
+
+// noCandidates reports a tick with no switchable account besides the active
+// one.
+func (e *Engine) noCandidates(trigger string) tickResult {
+	e.noSwitch("no-candidates", "")
+	return blockedPacing(trigger, result(OutcomeBlocked))
 }
 
 // nothingRanked classifies a tick whose ranking came back empty. For a
@@ -257,7 +265,35 @@ func (e *Engine) nothingRanked(
 	if trigger == triggerBalance {
 		return e.balanced(active, now)
 	}
-	return e.blockedOutcome(trigger, active, activeH, cands)
+	return blockedPacing(trigger, e.blockedOutcome(active, activeH, cands))
+}
+
+// blockedPacing decides how long the runner waits after a Blocked tick, from
+// what the trigger says about the active account. Only an account that
+// cannot be worked on (exhausted or unmeasurable) earns a backoff:
+//
+//   - Below the threshold (consume-first, balance, projected) the active
+//     account is healthy and the tick is discretionary. Under `best` such a
+//     tick never even looks for candidates and keeps the interval; finding
+//     none under another strategy must not change that, or the threshold
+//     check and the burn-rate projection wait up to 5 minutes (or, when the
+//     other accounts are all exhausted, until their recovery).
+//   - Past the threshold (proactive) the account is still usable and burning
+//     toward 100%, so the tick keeps polling — unless every candidate is
+//     exhausted with a known recovery, where nothing can change before that
+//     instant and the recovery wait applies.
+//   - at-limit and failover keep the backoff and the recovery wait.
+func blockedPacing(trigger string, r tickResult) tickResult {
+	if r.outcome != OutcomeBlocked {
+		return r
+	}
+	switch trigger {
+	case triggerConsumeFirst, triggerBalance, triggerProjected:
+		r.keepPolling = true
+	case triggerProactive:
+		r.keepPolling = r.recoverAt == 0
+	}
+	return r
 }
 
 // selectTargets orders the switch targets for this tick, possibly
@@ -465,10 +501,8 @@ func sevenDayReset(u *usage.Usage) int64 {
 
 // blockedOutcome classifies an empty ranking: everything exhausted (with a
 // recovery hint for the runner), nothing measurable, or nothing qualifying.
-// A proactive (or projected) trigger means the active account is past, or
-// about to pass, the threshold, so a nothing-qualifies result is marked
-// pressing: the runner keeps polling.
-func (e *Engine) blockedOutcome(trigger string, active *switcher.Snapshot, activeH *float64, cands []candidate) tickResult {
+// How long the runner then waits is blockedPacing's call.
+func (e *Engine) blockedOutcome(active *switcher.Snapshot, activeH *float64, cands []candidate) tickResult {
 	measured, exhausted := 0, 0
 	for _, c := range cands {
 		if c.headroom == nil {
@@ -488,13 +522,12 @@ func (e *Engine) blockedOutcome(trigger string, active *switcher.Snapshot, activ
 		e.emit("all-exhausted", fields)
 		return tickResult{outcome: OutcomeBlocked, recoverAt: earliest}
 	}
-	pressing := trigger == triggerProactive || trigger == triggerProjected
 	if measured == 0 {
 		e.noSwitch("no-comparison", "")
-		return tickResult{outcome: OutcomeBlocked, pressing: pressing}
+		return result(OutcomeBlocked)
 	}
 	e.noSwitch("no-qualifying-candidate", "")
-	return tickResult{outcome: OutcomeBlocked, pressing: pressing}
+	return result(OutcomeBlocked)
 }
 
 // earliestRecovery is the soonest instant any exhausted account (active

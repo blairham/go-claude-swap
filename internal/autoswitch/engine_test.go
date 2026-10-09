@@ -130,24 +130,75 @@ func TestLeastBadHonorsCooldown(t *testing.T) {
 // the runner must keep the normal interval rather than the 300s backoff.
 func TestNoQualifyingPastThresholdKeepsPolling(t *testing.T) {
 	e := testEngine(t)
-	cands := []candidate{cand(2, hp(10))}
-	active := &switcher.Snapshot{Slot: 3}
 	now := time.Unix(1_800_000_000, 0)
-
-	res := e.blockedOutcome(triggerProactive, active, hp(9), cands)
-	if res.outcome != OutcomeBlocked || !res.pressing {
-		t.Fatalf("proactive no-qualifying = %+v, want pressing Blocked", res)
+	res := e.nothingRanked(triggerProactive, &switcher.Snapshot{Slot: 3}, hp(9), []candidate{cand(2, hp(10))}, now)
+	if res.outcome != OutcomeBlocked || !res.keepPolling {
+		t.Fatalf("proactive no-qualifying = %+v, want Blocked that keeps polling", res)
 	}
+	assertInterval(t, e, res, now, "proactive no-qualifying")
+}
+
+func assertInterval(t *testing.T, e *Engine, res tickResult, now time.Time, what string) {
+	t.Helper()
 	if d := e.delayAfter(res, now); d < 0.9*e.Interval || d > 1.1*e.Interval {
-		t.Fatalf("pressing delay = %vs, want the %vs interval ±10%%", d, e.Interval)
+		t.Errorf("%s: delay = %vs, want the %vs interval ±10%% (outcome %v)", what, d, e.Interval, res.outcome)
 	}
+}
 
-	// Below the threshold (consume-first found nothing) the backoff stays.
-	res = e.blockedOutcome(triggerConsumeFirst, active, hp(30), cands)
-	if res.pressing {
-		t.Fatalf("below-threshold no-qualifying must not be pressing: %+v", res)
+// #39: a Blocked tick while the active account still has headroom keeps the
+// normal interval under every strategy — whether no account is switchable at
+// all, nothing qualifies, or every other account is exhausted. Backing off
+// would delay the threshold check and the burn-rate projection by minutes.
+func TestBlockedWithHeadroomNeverBacksOff(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	// The active account is 40% used with a weekly reset after every
+	// candidate's, so consume-first could rank them if they were healthy.
+	active := &switcher.Snapshot{Slot: 3, Usage: weekly(0, 40, 150, now)}
+	unhealthy := []candidate{pacedCand(2, weekly(0, 95, 10, now))}
+	exhausted := []candidate{pacedCand(2, weekly(0, 100, 0.5, now))}
+
+	cases := []struct {
+		strategy string
+		trigger  string
+		activeH  float64
+	}{
+		{strategyBest, triggerProjected, 60},
+		{strategyBest, triggerProactive, 5},
+		{strategyConsumeFirst, triggerConsumeFirst, 60},
+		{strategyConsumeFirst, triggerProjected, 60},
+		{strategyConsumeFirst, triggerProactive, 5},
+		{strategyBalance, triggerBalance, 60},
+		{strategyBalance, triggerProjected, 60},
+		{strategyBalance, triggerProactive, 5},
 	}
-	if d := e.delayAfter(res, now); d != 300 {
-		t.Fatalf("non-pressing blocked delay = %vs, want 300s", d)
+	for _, c := range cases {
+		e := testEngine(t)
+		e.Strategy = c.strategy
+		name := c.strategy + "/" + c.trigger
+		assertInterval(t, e, e.noCandidates(c.trigger), now, name+" no-candidates")
+		assertInterval(t, e, e.nothingRanked(c.trigger, active, hp(c.activeH), unhealthy, now), now, name+" no-qualifying")
+		if c.trigger == triggerProactive {
+			continue // past the threshold, all-exhausted waits for recovery (below)
+		}
+		assertInterval(t, e, e.nothingRanked(c.trigger, active, hp(c.activeH), exhausted, now), now, name+" others exhausted")
+	}
+}
+
+// The backoff and the recovery wait are for an active account that cannot be
+// worked on, and for a past-threshold account with nothing to move to before
+// a known recovery.
+func TestBlockedBackoffStillApplies(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	e := testEngine(t)
+	active := &switcher.Snapshot{Slot: 3}
+	for _, trig := range []string{triggerAtLimit, triggerFailover} {
+		if d := e.delayAfter(e.noCandidates(trig), now); d != 300 {
+			t.Errorf("%s no-candidates: delay = %vs, want 300s", trig, d)
+		}
+	}
+	exhausted := []candidate{pacedCand(2, weekly(0, 100, 0.5, now))}
+	res := e.nothingRanked(triggerProactive, active, hp(5), exhausted, now)
+	if res.keepPolling || res.recoverAt != now.Add(30*time.Minute).Unix() {
+		t.Fatalf("proactive, others exhausted = %+v, want the recovery wait", res)
 	}
 }

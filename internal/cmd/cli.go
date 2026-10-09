@@ -35,6 +35,9 @@ func CommandFactory() map[string]cli.CommandFactory {
 		"add": func() (cli.Command, error) {
 			return &AddCommand{UI: ui}, nil
 		},
+		"add-token": func() (cli.Command, error) {
+			return &AddTokenCommand{UI: ui}, nil
+		},
 		"login": func() (cli.Command, error) {
 			return &LoginCommand{UI: ui}, nil
 		},

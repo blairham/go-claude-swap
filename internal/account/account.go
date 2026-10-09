@@ -28,7 +28,14 @@ type Account struct {
 	Added            string `json:"added"`
 	Alias            string `json:"alias,omitempty"`
 	Disabled         bool   `json:"disabled,omitempty"`
+	// Kind is "api_key" for a managed API-key account (added with
+	// add-token); absent means OAuth, including setup-token accounts.
+	// Written by claude-swap too, so it must survive a roster rewrite.
+	Kind string `json:"kind,omitempty"`
 }
+
+// KindAPIKey marks a managed API-key account in the roster.
+const KindAPIKey = "api_key"
 
 // Sequence is the roster document (sequence.json).
 type Sequence struct {

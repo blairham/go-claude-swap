@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -18,7 +21,7 @@ type AddCommand struct {
 
 // AddFlags for cswap add.
 type AddFlags struct {
-	Slot  int    `long:"slot" description:"Slot number to use (default: next free)"`
+	Slot  int    `long:"slot"  description:"Slot number to use (default: next free)"`
 	Alias string `long:"alias" description:"Alias for the account"`
 }
 

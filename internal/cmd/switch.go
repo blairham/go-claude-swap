@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -16,7 +19,7 @@ type SwitchCommand struct {
 // SwitchFlags for cswap switch.
 type SwitchFlags struct {
 	Force bool `long:"force" description:"Skip the already-active guard and switch even when backups or token refresh fail"`
-	JSON  bool `long:"json" description:"Emit machine-readable JSON"`
+	JSON  bool `long:"json"  description:"Emit machine-readable JSON"`
 }
 
 // Help text.

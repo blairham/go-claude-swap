@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package switcher
 
 import (
@@ -88,8 +91,13 @@ func AddToken(token, email string, slot int) (*TokenResult, error) {
 	existing := seq.FindByIdentity(email, "")
 	if existing != 0 && isAPIKeyAccount(seq.Get(existing)) != isAPIKey {
 		kinds := map[bool]string{true: "API-key", false: "OAuth"}
-		return nil, fmt.Errorf("%q already exists as an %s account (slot %d); cannot add it as an %s account — pass a distinct --email",
-			email, kinds[!isAPIKey], existing, kinds[isAPIKey])
+		return nil, fmt.Errorf(
+			"%q already exists as an %s account (slot %d); cannot add it as an %s account — pass a distinct --email",
+			email,
+			kinds[!isAPIKey],
+			existing,
+			kinds[isAPIKey],
+		)
 	}
 
 	cred, cfg := tokenMaterial(token, email, isAPIKey)

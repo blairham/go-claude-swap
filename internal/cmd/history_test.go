@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -78,7 +81,10 @@ func TestHistoryCommandJSON(t *testing.T) {
 func TestHistoryCommandHumanAndEmpty(t *testing.T) {
 	historyEnv(t)
 	ui := cli.NewMockUi()
-	if code := (&HistoryCommand{UI: ui}).Run(nil); code != 0 || !strings.Contains(ui.OutputWriter.String(), "No switches recorded") {
+	if code := (&HistoryCommand{UI: ui}).Run(
+		nil,
+	); code != 0 ||
+		!strings.Contains(ui.OutputWriter.String(), "No switches recorded") {
 		t.Fatalf("empty: %d %q", code, ui.OutputWriter.String())
 	}
 	if code := (&HistoryCommand{UI: cli.NewMockUi()}).Run([]string{"--since", "soon"}); code != 1 {

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package autoswitch
 
 import (
@@ -96,7 +99,12 @@ func TestBalanceRatio(t *testing.T) {
 	active := &switcher.Snapshot{Slot: 3, Usage: weekly(0, 60, 100, now)} // 0.4/h
 	under := pacedCand(2, weekly(0, 44, 100, now))                        // 0.56/h = 1.4x
 	at := pacedCand(4, weekly(0, 40, 100, now))                           // 0.6/h = 1.5x
-	if got := slots(e.rankBalance(triggerBalance, []candidate{under, at}, hp(40), active, now)); !equalInts(got, []int{4}) {
+	if got := slots(
+		e.rankBalance(triggerBalance, []candidate{under, at}, hp(40), active, now),
+	); !equalInts(
+		got,
+		[]int{4},
+	) {
 		t.Fatalf("ranking = %v, want only the 1.5x candidate [4]", got)
 	}
 	// An active account with no weekly data cannot be compared.
@@ -140,7 +148,15 @@ func TestBalanceTriggerWiring(t *testing.T) {
 	api := []candidate{cand(11, nil)}
 	now := time.Now()
 	active := &switcher.Snapshot{Slot: 3, Usage: weekly(0, 10, 150, now)}
-	if trig, ranked := e.selectTargets(triggerBalance, []candidate{pacedCand(2, weekly(0, 20, 150, now))}, api, hp(90), active); len(ranked) != 0 {
+	if trig, ranked := e.selectTargets(
+		triggerBalance,
+		[]candidate{pacedCand(2, weekly(0, 20, 150, now))},
+		api,
+		hp(90),
+		active,
+	); len(
+		ranked,
+	) != 0 {
 		t.Fatalf("balance with nothing ahead = %q %v, want nothing", trig, slots(ranked))
 	}
 	// Nothing ahead is the steady state, not a block: no backoff.

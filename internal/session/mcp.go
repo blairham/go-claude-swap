@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package session
 
 import (
@@ -238,7 +241,9 @@ func stashDisplacedMCP(dir string, displaced map[string]json.RawMessage) (bool, 
 		if validStash(stash) {
 			return true, nil
 		}
-		return false, []string{MCPDisplacedStash + " exists but is not a valid stash; leaving the profile's MCP servers in place."}
+		return false, []string{
+			MCPDisplacedStash + " exists but is not a valid stash; leaving the profile's MCP servers in place.",
+		}
 	}
 	payload := struct {
 		SchemaVersion int                        `json:"schemaVersion"`
@@ -251,7 +256,9 @@ func stashDisplacedMCP(dir string, displaced map[string]json.RawMessage) (bool, 
 	if err != nil {
 		return false, []string{fmt.Sprintf("Could not stash the profile's MCP servers (%v); leaving them in place.", err)}
 	}
-	return true, []string{"Session MCP servers now mirror your default profile; the profile's previous definitions were saved to " + MCPDisplacedStash + "."}
+	return true, []string{
+		"Session MCP servers now mirror your default profile; the profile's previous definitions were saved to " + MCPDisplacedStash + ".",
+	}
 }
 
 func validStash(path string) bool {

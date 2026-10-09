@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package autoswitch
 
 import (
@@ -59,7 +62,13 @@ func weeklyPace(u *usage.Usage, models []string, now time.Time) (float64, bool) 
 // first. Every target must land healthy. Past the threshold (proactive) it
 // also needs the usual headroom hysteresis; below it (a rebalance) it needs
 // balanceRatio times the active account's pace instead.
-func (e *Engine) rankBalance(trigger string, cands []candidate, activeH *float64, active *switcher.Snapshot, now time.Time) []candidate {
+func (e *Engine) rankBalance(
+	trigger string,
+	cands []candidate,
+	activeH *float64,
+	active *switcher.Snapshot,
+	now time.Time,
+) []candidate {
 	var activePace float64
 	if trigger == triggerBalance {
 		p, ok := weeklyPace(active.Usage, e.models, now)

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package usage
 
 import (
@@ -143,7 +146,10 @@ func TestPlanAfterFetch(t *testing.T) {
 		t.Errorf("urgent interval = %v, want %v (below the %v floor)", iv, UrgentInterval, MinInterval)
 	}
 	// Recent 429 suppresses urgency.
-	_, iv = PlanAfterFetch(PlanInput{Active: true, PrevInterval: 180, PrevPct: 70, NewPct: 80, Threshold: 90, Recent429: true}, now)
+	_, iv = PlanAfterFetch(
+		PlanInput{Active: true, PrevInterval: 180, PrevPct: 70, NewPct: 80, Threshold: 90, Recent429: true},
+		now,
+	)
 	if iv < 360 {
 		t.Errorf("post-429 interval = %v, want >= 360", iv)
 	}

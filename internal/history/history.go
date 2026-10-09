@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package history keeps the structured switch record: one JSON object per
 // line in switch-history.jsonl under the backup root, appended by every
 // completed switch (manual, TUI, or auto) and trimmed to a bounded size.

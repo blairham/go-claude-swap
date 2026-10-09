@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package account models the sequence.json roster: the set of captured
 // accounts, their slot numbers, aliases, and which one is active.
 package account
@@ -78,6 +81,13 @@ func Load() (*Sequence, error) {
 	}
 	if seq.Accounts == nil {
 		seq.Accounts = map[string]*Account{}
+	}
+	// A null entry (a hand edit) holds no account; every caller dereferences
+	// what it finds in the map.
+	for k, a := range seq.Accounts {
+		if a == nil {
+			delete(seq.Accounts, k)
+		}
 	}
 	return &seq, nil
 }
@@ -167,8 +177,11 @@ func (s *Sequence) Resolve(selector string) (int, error) {
 		return 0, fmt.Errorf("no account in slot %d", n)
 	}
 	for k, a := range s.Accounts {
+		n, err := strconv.Atoi(k)
+		if err != nil {
+			continue // not a slot; nothing can switch to it
+		}
 		if a.Alias == selector || a.Email == selector {
-			n, _ := strconv.Atoi(k)
 			return n, nil
 		}
 	}
@@ -180,8 +193,11 @@ func (s *Sequence) Resolve(selector string) (int, error) {
 // organizations.
 func (s *Sequence) FindByIdentity(email, orgUUID string) int {
 	for k, a := range s.Accounts {
+		n, err := strconv.Atoi(k)
+		if err != nil {
+			continue // not a slot; 0 already means "not found"
+		}
 		if a.Email == email && a.OrganizationUUID == orgUUID {
-			n, _ := strconv.Atoi(k)
 			return n
 		}
 	}

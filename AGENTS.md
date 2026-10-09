@@ -72,9 +72,11 @@ The invariants below are the reason most of this code is shaped the way it is. R
 
 ## Code Conventions
 
-- **Go version**: `go.mod`'s `go` directive and `.tool-versions`' `golang` pin must match **exactly** — enforced by the `check-go-version-sync` pre-commit hook from [blairham/pre-commit-hooks](https://github.com/blairham/pre-commit-hooks) (pinned by `rev` in `.pre-commit-config.yaml` — there is no local copy). `go.mod` is authoritative (its directive gets pulled up by the `tool` block during `go mod tidy`); run `make sync` to bring `.tool-versions` back in line. CI pins the minor line (`GO_VERSION: "1.26"`), which setup-go resolves to the latest patch — update it only when the minor version changes
-- **Formatter**: gofumpt via `go tool` (pinned in go.mod's `tool` block alongside golangci-lint). Formatting is applied at commit time by the `golangci-lint-fmt` hook, driven by `.golangci.yml` — keep the hook `rev` in lockstep with the `tool` pin and the CI action version
+- **Go version**: `go.mod`'s `go` directive and `.tool-versions`' `golang` pin must match **exactly** — enforced by the `check-go-version-sync` pre-commit hook from [blairham/pre-commit-hooks](https://github.com/blairham/pre-commit-hooks) (pinned by `rev` in `.pre-commit-config.yaml` — there is no local copy). `go.mod` is authoritative (its directive gets pulled up by the `tool` block during `go mod tidy`); run `make sync` to bring `.tool-versions` back in line. CI and the release take the toolchain from `go.mod` (`go-version-file`), and blairham/.github's drift check requires the latest published 1.26.x patch
+- **Formatter**: gofumpt via `go tool` (pinned in go.mod's `tool` block alongside golangci-lint). Formatting is applied at commit time by the `golangci-lint-fmt` hook, driven by `.golangci.yml` (gofmt, gofumpt, goimports, gci, golines) — keep the hook `rev` in lockstep with the `tool` pin
 - **Linter**: golangci-lint v2, config in `.golangci.yml`
+- **Synced files are not edited here.** `.golangci.yml`, `.pre-commit-config.yaml`, `.editorconfig`, `.yamllint.yml`, `.gitleaks.toml`, `.github/dependabot.yml`, `.github/CODEOWNERS`, `.github/workflows/scorecard.yml` and `.github/workflows/codeql.yml` are rendered from [blairham/.github](https://github.com/blairham/.github)'s baseline by its `make sync REPO=go-claude-swap DIR=<checkout>`, and its weekly drift check reports any difference. Change the baseline there; a departure for this repo is an `overrides/go-claude-swap.yml` entry with a reason, approved first
+- **License**: Apache-2.0. Every hand-written `.go` file starts with `// SPDX-FileCopyrightText: 2026 Blair Hamilton` and `// SPDX-License-Identifier: Apache-2.0` (the `check-license-headers` hook). cswap is a port of the MIT-licensed claude-swap; `NOTICE` carries its copyright and permission notice and must keep doing so
 - **Imports**: grouped by goimports with local prefix `github.com/blairham/go-claude-swap` — local imports get their own trailing group
 - **Commands**: implement `hashicorp/cli.Command` (`Run(args []string) int`, `Help()`, `Synopsis()`), registered in `cmd.CommandFactory`. Aliases (`ls`, `rm`, `watch`, `relogin`) reuse the same struct rather than duplicating it
 - **Flags**: `jessevdk/go-flags` struct tags, parsed through the shared `parseFlags` helper (handles `-h` and error printing)
@@ -84,9 +86,10 @@ The invariants below are the reason most of this code is shaped the way it is. R
 
 ## CI/CD
 
-- **ci.yml**: `pre-commit` (the hooks plus `golangci-lint-new` over the change's diff), `test` (ubuntu + macos matrix, `make test`), then `build` — on push to main and PRs
-- **goreleaser.yml**: GoReleaser on version tags (`v*`) or manual dispatch
-- **Pre-commit hooks** (`pre-commit install`): trailing-whitespace, end-of-file-fixer, check-yaml, check-added-large-files, check-merge-conflict, detect-private-key, go-mod-tidy-repo, go-fumpt-repo, `check-go-version-sync` (blairham/pre-commit-hooks), `golangci-lint-fmt` + `golangci-lint`, gitleaks. `golangci-lint-fmt` applies every formatter in `.golangci.yml` (gofumpt + goimports); `golangci-lint` lints only what changed since HEAD. The whole-repo run stays in CI — `--new-from-rev` can't see whole-module linters like `unused`
+- **ci.yml** calls blairham/.github's `go-ci.yml` (pinned by the latest tag's commit SHA with a `# vX.Y.Z` comment): `CI / Pre-commit` (the hooks, plus `golangci-lint-new` over the change's diff — never `--all-files`), `CI / Detect changed files`, `CI / Build and test (ubuntu-latest)` and `(macos-latest)`, and `CI / Fuzz` (every `Fuzz*` target, on main and weekly, never on a pull request) — on pull requests and pushes to main
+- **release.yml** calls `go-release.yml` on a `v*` tag: tests, GoReleaser (archives + the Homebrew formula with its `service` block, via `HOMEBREW_TAP_TOKEN`), keyless cosign over `checksums.txt`, SLSA build provenance for every archive (also attached as `go-claude-swap-<tag>.intoto.jsonl`). The release notes are the tag's `## [X.Y.Z]` section of `CHANGELOG.md` (no `v`), which must exist. `workflow_dispatch` with `dry-run` builds a snapshot and publishes nothing
+- **codeql.yml** and **scorecard.yml** are synced from the baseline; Dependabot covers gomod and GitHub Actions
+- **Pre-commit hooks** (`pre-commit install`): trailing-whitespace, end-of-file-fixer, check-yaml, check-added-large-files, detect-private-key, `golangci-lint-fmt` + `golangci-lint` (what changed since HEAD), go-mod-tidy-repo, `check-license-headers`, `check-go-version-sync`, `check-conflict-markers` and `go-vulncheck` (blairham/pre-commit-hooks), misspell over prose, gitleaks, yamllint
 
 ## Key Dependencies
 
@@ -99,6 +102,6 @@ The invariants below are the reason most of this code is shaped the way it is. R
 
 ## Testing
 
-- `go test -race ./...`; unit tests cover `account`, `autoswitch`, `cmd` (history, run, add-token), `credentials`, `history`, `logfile`, `mappings`, `notify`, `oauth`, `paths`, `service`, `session`, `settings`, `switcher`, `usage`, and `pkg/swapapi`
+- `go test -race ./...`; fuzz targets cover the files and responses cswap parses (`settings`: `FuzzParseStrict`, `FuzzLoad`; `account`: `FuzzRoster`; `mappings`: `FuzzCovers`, `FuzzMappingsFile`; `usage`: `FuzzParseUsage`), and a finding is committed under `testdata/fuzz/` as a regression case; unit tests cover `account`, `autoswitch`, `cmd` (history, run, add-token), `credentials`, `history`, `logfile`, `mappings`, `notify`, `oauth`, `paths`, `service`, `session`, `settings`, `switcher`, `usage`, and `pkg/swapapi`
 - The TUI and the live Keychain/credential paths are not unit-tested — they need an interactive terminal and a real login
 - Tests must never touch the real backup root, `~/.claude.json`, or the Keychain. The established pattern is `t.TempDir()` plus `t.Setenv` on `HOME` / `XDG_DATA_HOME` / `CLAUDE_CONFIG_DIR`, with every path resolved through `internal/paths` so the redirect takes effect

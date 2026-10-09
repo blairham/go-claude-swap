@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -108,7 +111,9 @@ func (c *StatusCommand) Run(args []string) int {
 		})
 	}
 
-	c.UI.Output(fmt.Sprintf("Status: Account-%d (%s %s)", slot, accountLabel(a.Alias, a.Email), orgTag(a.OrganizationName)))
+	c.UI.Output(
+		fmt.Sprintf("Status: Account-%d (%s %s)", slot, accountLabel(a.Alias, a.Email), orgTag(a.OrganizationName)),
+	)
 	c.UI.Output(fmt.Sprintf("  Total managed accounts: %d", len(seq.Accounts)))
 	if snap != nil && snap.Usage != nil {
 		for _, l := range usageLines(snap.Usage, now) {

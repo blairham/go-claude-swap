@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -99,7 +102,7 @@ func usageLines(u *usage.Usage, now time.Time) []string {
 	}
 	var rows []row
 
-	windowBody := func(pct float64, resetsAt string, marker string) string {
+	windowBody := func(pct float64, resetsAt, marker string) string {
 		ts := usage.ParseReset(resetsAt)
 		if ts == 0 {
 			return fmt.Sprintf("%3.0f%%%s", pct, marker)

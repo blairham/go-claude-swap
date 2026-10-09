@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -21,8 +24,8 @@ type HistoryCommand struct {
 
 // HistoryFlags for cswap history.
 type HistoryFlags struct {
-	JSON  bool   `long:"json" description:"Emit machine-readable JSON"`
-	Limit int    `long:"limit" default:"20" description:"Show at most this many of the newest switches (0 = all)"`
+	JSON  bool   `long:"json"  description:"Emit machine-readable JSON"`
+	Limit int    `long:"limit" description:"Show at most this many of the newest switches (0 = all)"                                 default:"20"`
 	Since string `long:"since" description:"Only switches since a duration ago (90m, 24h, 7d) or a date/time (2026-10-01, RFC 3339)"`
 }
 
@@ -152,5 +155,8 @@ func parseSince(s string, now time.Time) (time.Time, error) {
 	if t, err := time.Parse(time.RFC3339, s); err == nil {
 		return t, nil
 	}
-	return time.Time{}, fmt.Errorf("invalid --since %q: use a duration (90m, 24h, 7d) or a date/time (2026-10-01, RFC 3339)", s)
+	return time.Time{}, fmt.Errorf(
+		"invalid --since %q: use a duration (90m, 24h, 7d) or a date/time (2026-10-01, RFC 3339)",
+		s,
+	)
 }

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package swapapi
 
 import (
@@ -100,7 +103,10 @@ func TestWake(t *testing.T) {
 func TestServeRefusesSecondServer(t *testing.T) {
 	sock := shortSockPath(t)
 	bcast := NewBroadcast(nil)
-	engine := autoswitch.NewEngine(autoswitch.Config{Threshold: 90, Interval: 60, Strategy: "best", UnhealthyTicks: 3}, bcast)
+	engine := autoswitch.NewEngine(
+		autoswitch.Config{Threshold: 90, Interval: 60, Strategy: "best", UnhealthyTicks: 3},
+		bcast,
+	)
 	srv, err := Serve(sock, engine, bcast, "test")
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +160,10 @@ func TestWakeClient(t *testing.T) {
 	os.Remove(sock)
 
 	bcast := NewBroadcast(nil)
-	engine := autoswitch.NewEngine(autoswitch.Config{Threshold: 90, Interval: 60, Strategy: "best", UnhealthyTicks: 3}, bcast)
+	engine := autoswitch.NewEngine(
+		autoswitch.Config{Threshold: 90, Interval: 60, Strategy: "best", UnhealthyTicks: 3},
+		bcast,
+	)
 	srv, err := Serve(sock, engine, bcast, "test")
 	if err != nil {
 		t.Fatal(err)

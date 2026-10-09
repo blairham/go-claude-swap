@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package switcher
 
 import (
@@ -62,19 +65,34 @@ func PrepareSession(selector string, opts SessionOptions) (*SessionPlan, error) 
 	plan := &SessionPlan{Slot: slot, Email: a.Email}
 
 	if a.Kind == account.KindAPIKey {
-		return nil, fmt.Errorf("account %d (%s) is an API-key account; 'cswap run' (session mode) does not support API-key accounts — use 'cswap switch %d' to make it the default login instead", slot, a.Email, slot)
+		return nil, fmt.Errorf(
+			"account %d (%s) is an API-key account; 'cswap run' (session mode) does not support API-key accounts — use 'cswap switch %d' to make it the default login instead",
+			slot,
+			a.Email,
+			slot,
+		)
 	}
 
 	if preset := os.Getenv("CLAUDE_CONFIG_DIR"); preset != "" {
 		// "The default login" means nothing here (this may be a session
 		// terminal already), so there is no fast path.
-		plan.Notes = append(plan.Notes, fmt.Sprintf("CLAUDE_CONFIG_DIR is already set (%s); overriding it for this launch.", preset))
+		plan.Notes = append(
+			plan.Notes,
+			fmt.Sprintf("CLAUDE_CONFIG_DIR is already set (%s); overriding it for this launch.", preset),
+		)
 	} else if id, _ := claudecfg.ReadIdentity(); id != nil && id.Email == a.Email && id.OrganizationUUID == a.OrganizationUUID {
 		if opts.RequireSession {
-			return nil, fmt.Errorf("account %d (%s) is the active default login, so this launch would run plain claude on the default login rather than in a session profile; switch the default login to another account first, or run claude directly", slot, a.Email)
+			return nil, fmt.Errorf(
+				"account %d (%s) is the active default login, so this launch would run plain claude on the default login rather than in a session profile; switch the default login to another account first, or run claude directly",
+				slot,
+				a.Email,
+			)
 		}
 		plan.Direct = true
-		plan.Notes = append(plan.Notes, fmt.Sprintf("Account-%d (%s) is already the active default login — launching claude directly.", slot, a.Email))
+		plan.Notes = append(
+			plan.Notes,
+			fmt.Sprintf("Account-%d (%s) is already the active default login — launching claude directly.", slot, a.Email),
+		)
 		return plan, nil
 	}
 
@@ -126,7 +144,10 @@ func PrepareSession(selector string, opts SessionOptions) (*SessionPlan, error) 
 
 	cred, unreadable := credentials.ReadBackup(slot, a.Email)
 	if unreadable {
-		return nil, fmt.Errorf("account %d's backup is unreadable right now (Keychain locked or no GUI session) — retry from a GUI terminal; do not re-add", slot)
+		return nil, fmt.Errorf(
+			"account %d's backup is unreadable right now (Keychain locked or no GUI session) — retry from a GUI terminal; do not re-add",
+			slot,
+		)
 	}
 	if cred == "" {
 		return nil, fmt.Errorf("account %d has no stored credentials — run 'cswap login %d' to authenticate it", slot, slot)
@@ -139,7 +160,10 @@ func PrepareSession(selector string, opts SessionOptions) (*SessionPlan, error) 
 		return nil, fmt.Errorf("account %d has no stored config backup — run 'cswap login %d': %w", slot, slot, err)
 	}
 	if !session.Quiescent(dir) {
-		return nil, fmt.Errorf("account %d's session profile is in use by a running Claude Code but does not validate; exit that session and retry", slot)
+		return nil, fmt.Errorf(
+			"account %d's session profile is in use by a running Claude Code but does not validate; exit that session and retry",
+			slot,
+		)
 	}
 	if err := session.Bootstrap(dir, cred, cfg); err != nil {
 		return nil, fmt.Errorf("seeding the session profile for Account-%d: %w", slot, err)
@@ -151,10 +175,19 @@ func PrepareSession(selector string, opts SessionOptions) (*SessionPlan, error) 
 		return plan, nil
 	case v == session.Unknown, v == session.Unreachable:
 		// A probe that did not answer says nothing about the profile: keep it.
-		return nil, fmt.Errorf("the session profile for Account-%d (%s) could not be verified: 'claude auth status' did not run or did not answer; the profile is left in place — check that claude is on PATH, then retry", slot, a.Email)
+		return nil, fmt.Errorf(
+			"the session profile for Account-%d (%s) could not be verified: 'claude auth status' did not run or did not answer; the profile is left in place — check that claude is on PATH, then retry",
+			slot,
+			a.Email,
+		)
 	default:
 		_ = session.Remove(dir)
-		return nil, fmt.Errorf("the session profile for Account-%d (%s) failed validation — run 'cswap login %d' to re-authenticate it", slot, a.Email, slot)
+		return nil, fmt.Errorf(
+			"the session profile for Account-%d (%s) failed validation — run 'cswap login %d' to re-authenticate it",
+			slot,
+			a.Email,
+			slot,
+		)
 	}
 }
 
@@ -242,10 +275,21 @@ func reconcileSessionBeforeActivation(slot int, a *account.Account) ([]string, e
 	live := session.ScanLive(dir)
 	if live.Busy() {
 		if profileAhead(slot, a.Email, a.OrganizationUUID) != "" {
-			return nil, fmt.Errorf("account %d (%s) has a live session-mode Claude Code, and its session profile's credential has rotated past the stored backup: activating the backup would fail on its first refresh — exit the session (its credential is adopted once nothing runs in it), or switch to another account", slot, a.Email)
+			return nil, fmt.Errorf(
+				"account %d (%s) has a live session-mode Claude Code, and its session profile's credential has rotated past the stored backup: activating the backup would fail on its first refresh — exit the session (its credential is adopted once nothing runs in it), or switch to another account",
+				slot,
+				a.Email,
+			)
 		}
 		if len(live.PIDs) > 0 {
-			return []string{fmt.Sprintf("Account-%d (%s) also has a live session-mode Claude Code; if that session later fails to authenticate, exit it and re-run 'cswap run %d'", slot, a.Email, slot)}, nil
+			return []string{
+				fmt.Sprintf(
+					"Account-%d (%s) also has a live session-mode Claude Code; if that session later fails to authenticate, exit it and re-run 'cswap run %d'",
+					slot,
+					a.Email,
+					slot,
+				),
+			}, nil
 		}
 		return nil, nil
 	}
@@ -279,10 +323,22 @@ func ensureNoLiveSession(slot int, email, action string) error {
 	live := session.ScanLive(dir)
 	switch {
 	case len(live.PIDs) > 0:
-		return fmt.Errorf("account %d (%s) has a live session-mode Claude Code (PID %v); exit it first, then retry %s", slot, email, live.PIDs, action)
+		return fmt.Errorf(
+			"account %d (%s) has a live session-mode Claude Code (PID %v); exit it first, then retry %s",
+			slot,
+			email,
+			live.PIDs,
+			action,
+		)
 	case live.Unreadable > 0:
-		return fmt.Errorf("account %d (%s) has %d session record(s) that could not be read, so whether Claude Code is running cannot be told; inspect %s, then retry %s",
-			slot, email, live.Unreadable, filepath.Join(dir, "sessions"), action)
+		return fmt.Errorf(
+			"account %d (%s) has %d session record(s) that could not be read, so whether Claude Code is running cannot be told; inspect %s, then retry %s",
+			slot,
+			email,
+			live.Unreadable,
+			filepath.Join(dir, "sessions"),
+			action,
+		)
 	}
 	return nil
 }
@@ -328,7 +384,9 @@ func relocateProfiles(moves map[int]int, accts map[int]*account.Account) error {
 
 // ErrSessionShell refuses an account change from inside a `cswap run`
 // session.
-var ErrSessionShell = errors.New("this shell is inside a cswap run session profile (CLAUDE_CONFIG_DIR points at it); changing accounts here would operate on the wrong live store — unset CLAUDE_CONFIG_DIR or run from a normal shell")
+var ErrSessionShell = errors.New(
+	"this shell is inside a cswap run session profile (CLAUDE_CONFIG_DIR points at it); changing accounts here would operate on the wrong live store — unset CLAUDE_CONFIG_DIR or run from a normal shell",
+)
 
 // refuseSessionShell guards every entry point that changes the roster or the
 // live store. A CLAUDE_CONFIG_DIR inside <backup>/sessions/ means this shell

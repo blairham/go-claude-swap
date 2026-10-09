@@ -1,4 +1,5 @@
 # EditorConfig is awesome: https://editorconfig.org
+# Rendered from blairham/.github baseline/editorconfig.tmpl by `make sync`.
 root = true
 
 # Universal defaults — 2-space indent, LF, UTF-8, trim trailing whitespace
@@ -24,7 +25,16 @@ indent_size = 4
 indent_style = tab
 indent_size = 4
 
+# go.mod / go.sum — also tabs
+[{go.mod,go.sum}]
+indent_style = tab
+indent_size = 4
+
 # Shell scripts
 [*.{sh,bash}]
 indent_style = space
 indent_size = 4
+
+# Protocol buffer files
+[*.proto]
+indent_size = 2

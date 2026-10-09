@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package session
 
 import (
@@ -85,7 +88,11 @@ func TestScanLiveSkipsRecycledPID(t *testing.T) {
 	sessions := filepath.Join(dir, "sessions")
 	os.MkdirAll(sessions, 0o700)
 	write := func(name, procStart string) {
-		os.WriteFile(filepath.Join(sessions, name), fmt.Appendf(nil, `{"pid":%d,"procStart":%s}`, os.Getpid(), procStart), 0o600)
+		os.WriteFile(
+			filepath.Join(sessions, name),
+			fmt.Appendf(nil, `{"pid":%d,"procStart":%s}`, os.Getpid(), procStart),
+			0o600,
+		)
 	}
 	stubProc(t, "999", 0, false, true)
 

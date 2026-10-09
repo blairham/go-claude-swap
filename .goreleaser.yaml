@@ -5,38 +5,38 @@ version: 2
 project_name: cswap
 
 builds:
-- id: cswap
-  binary: cswap
-  main: ./cmd/cswap
-  env:
-  - CGO_ENABLED=0
-  goos:
-  - linux
-  - darwin
-  - windows
-  goarch:
-  - amd64
-  - arm64
-  ignore:
-  - goos: windows
-    goarch: arm64
-  ldflags:
-  - -s -w
-  - -X github.com/blairham/go-claude-swap/internal/cmd.Version={{.Version}}
-  - -X main.commit={{.Commit}}
-  - -X main.date={{.Date}}
+  - id: cswap
+    binary: cswap
+    main: ./cmd/cswap
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X github.com/blairham/go-claude-swap/internal/cmd.Version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
 
 archives:
-- id: default
-  formats:
-  - tar.gz
-  # this name template makes the OS and Arch compatible with the results of uname.
-  name_template: >-
-    {{ .ProjectName }}_ {{- title .Os }}_ {{- if eq .Arch "amd64" }}x86_64 {{- else }}{{ .Arch }}{{ end }}
-  format_overrides:
-  - goos: windows
+  - id: default
     formats:
-    - zip
+      - tar.gz
+    # this name template makes the OS and Arch compatible with the results of uname.
+    name_template: >-
+      {{ .ProjectName }}_ {{- title .Os }}_ {{- if eq .Arch "amd64" }}x86_64 {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
 
 # macOS signing + notarization, matching ghorg, stevedore and go-pre-commit.
 # Gated on isEnvSet, so releases still succeed unsigned when the secrets are
@@ -59,26 +59,25 @@ notarize:
 checksum:
   name_template: 'checksums.txt'
 
+# Keyless cosign signatures from the release workflow's identity. Signing
+# checksums.txt covers every archive. See SECURITY.md to verify.
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
 
-changelog:
-  sort: asc
-  use: github
-  groups:
-  - title: Features
-    regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
-    order: 0
-  - title: Bug Fixes
-    regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
-    order: 1
-  - title: Other
-    order: 999
-  filters:
-    exclude:
-    - '^docs:'
-    - '^test:'
-    - '^chore:'
+# The notes are the tag's CHANGELOG.md section, passed by release.yml
+# (go-release.yml) with --release-notes, which replaces the generated commit
+# list. Do not set `changelog.disable`: it skips the stage that reads
+# --release-notes too.
 
 # A formula (not a cask like the other tap entries) so the tap can carry a
 # `service` block: `brew services start blairham/tap/cswap` then runs the
@@ -88,7 +87,7 @@ changelog:
 # `brew services` at all. Formulae also work on Homebrew for Linux exactly as
 # they do on macOS.
 #
-# GoReleaser marks `brews` deprecated in favour of `homebrew_casks`, on the
+# GoReleaser marks `brews` deprecated in favor of `homebrew_casks`, on the
 # grounds that formulae installing pre-compiled binaries are "hackyish" and
 # were only needed because Linuxbrew could not handle casks. There is no
 # announced removal date, and the Linuxbrew limitation is not our reason for
@@ -97,24 +96,26 @@ changelog:
 # Note there is no quarantine hook here: casks flag their downloads with
 # com.apple.quarantine and need it stripped, formulae do not.
 brews:
-- name: cswap
-  repository:
-    owner: blairham
-    name: homebrew-tap
-    token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-  directory: Formula
-  homepage: https://github.com/blairham/go-claude-swap
-  description: Multi-account manager for Claude Code (Go rewrite of claude-swap)
-  license: MIT
-  install: |
-    bin.install "cswap"
-  service: |
-    run [opt_bin/"cswap", "auto", "--log-file", var/"log/cswap-auto.log"]
-    keep_alive true
-    log_path var/"log/cswap-auto.log"
-    error_log_path var/"log/cswap-auto.log"
-  test: |
-    system "#{bin}/cswap", "--version"
+  - name: cswap
+    repository:
+      owner: blairham
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: https://github.com/blairham/go-claude-swap
+    description: Multi-account manager for Claude Code (Go rewrite of claude-swap)
+    license: Apache-2.0
+    # A prerelease does not move the formula.
+    skip_upload: auto
+    install: |
+      bin.install "cswap"
+    service: |
+      run [opt_bin/"cswap", "auto", "--log-file", var/"log/cswap-auto.log"]
+      keep_alive true
+      log_path var/"log/cswap-auto.log"
+      error_log_path var/"log/cswap-auto.log"
+    test: |
+      system "#{bin}/cswap", "--version"
 
 release:
   draft: false

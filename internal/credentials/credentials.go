@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package credentials manages the active Claude Code credential (Keychain
 // on macOS, plaintext file elsewhere) and cswap's per-account backups
 // (Keychain-primary on macOS with base64 .enc file fallback).
@@ -361,7 +364,11 @@ func WriteBackupKeepSession(slot int, email, cred string) error {
 		}
 		PinFileMode()
 	}
-	if err := account.WriteFileAtomic(encPath, []byte(base64.StdEncoding.EncodeToString([]byte(cred))), 0o600); err != nil {
+	if err := account.WriteFileAtomic(
+		encPath,
+		[]byte(base64.StdEncoding.EncodeToString([]byte(cred))),
+		0o600,
+	); err != nil {
 		return err
 	}
 	if keychain.Available() {

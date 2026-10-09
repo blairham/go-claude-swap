@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -24,16 +27,16 @@ type AutoCommand struct {
 
 // AutoFlags for cswap auto.
 type AutoFlags struct {
-	Once      bool    `long:"once" description:"Run a single tick and exit (exit code = outcome)"`
-	JSON      bool    `long:"json" description:"Emit JSONL events"`
-	DryRun    bool    `long:"dry-run" description:"Decide but never switch"`
-	Interval  float64 `long:"interval" description:"Poll interval in seconds"`
+	Once      bool    `long:"once"      description:"Run a single tick and exit (exit code = outcome)"`
+	JSON      bool    `long:"json"      description:"Emit JSONL events"`
+	DryRun    bool    `long:"dry-run"   description:"Decide but never switch"`
+	Interval  float64 `long:"interval"  description:"Poll interval in seconds"`
 	Threshold float64 `long:"threshold" description:"Switch threshold percent"`
-	Cooldown  float64 `long:"cooldown" description:"Minimum seconds between proactive switches"`
-	Strategy  string  `long:"strategy" choice:"best" choice:"consume-first" choice:"balance" description:"Target selection strategy"`
-	Model     string  `long:"model" description:"Comma-separated model display names, 'auto', 'all', or 'none'"`
-	LogFile   string  `long:"log-file" description:"Append events to this file, rotated by size, instead of stdout"`
-	Verbose   bool    `long:"verbose" description:"Log every poll, not only changes and an hourly heartbeat"`
+	Cooldown  float64 `long:"cooldown"  description:"Minimum seconds between proactive switches"`
+	Strategy  string  `long:"strategy"  description:"Target selection strategy"                                      choice:"best" choice:"consume-first" choice:"balance"`
+	Model     string  `long:"model"     description:"Comma-separated model display names, 'auto', 'all', or 'none'"`
+	LogFile   string  `long:"log-file"  description:"Append events to this file, rotated by size, instead of stdout"`
+	Verbose   bool    `long:"verbose"   description:"Log every poll, not only changes and an hourly heartbeat"`
 }
 
 // Help text.

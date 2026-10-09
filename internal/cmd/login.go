@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -92,7 +95,9 @@ func (c *LoginCommand) Run(args []string) int {
 	switch outcome.Err {
 	case oauth.ErrNone:
 	case oauth.ErrStateMismatch:
-		c.UI.Error("Error: the pasted code does not belong to this login attempt — run 'cswap login' again and paste the fresh code")
+		c.UI.Error(
+			"Error: the pasted code does not belong to this login attempt — run 'cswap login' again and paste the fresh code",
+		)
 		return 1
 	case oauth.ErrTransient:
 		c.UI.Error("Error: the token exchange failed (network problem or expired code) — try again")

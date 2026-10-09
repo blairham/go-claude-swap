@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package settings manages cswap's settings.json: a small registry of typed,
 // bounded keys. Loading is forgiving (bad values clamp or fall back to
 // defaults); `config set` validates strictly; unknown keys survive
@@ -13,6 +16,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/blairham/go-claude-swap/internal/account"
 	"github.com/blairham/go-claude-swap/internal/claudecfg"
@@ -21,6 +25,10 @@ import (
 
 // SchemaVersion of settings.json.
 const SchemaVersion = 1
+
+// Auto is the value that makes a setting follow its surroundings:
+// autoswitch.model follows Claude Code's model, ui.theme the terminal.
+const Auto = "auto"
 
 // Kind is a setting's value type.
 type Kind int
@@ -75,15 +83,20 @@ var Registry = []Spec{
 		Help: "Consecutive failed polls before an account is unhealthy",
 	},
 	{
-		Key: "autoswitch.model", Kind: KindString, Default: "auto",
-		Help: "Model weekly limits to also switch on: auto (follow Claude Code's model), names (e.g. Fable,Opus), all, or none",
+		Key:     "autoswitch.model",
+		Kind:    KindString,
+		Default: Auto,
+		Help:    "Model weekly limits to also switch on: auto (follow Claude Code's model), names (e.g. Fable,Opus), all, or none",
 	},
 	{
-		Key: "autoswitch.notify", Kind: KindChoice, Choices: []string{"off", "important", "all"}, Default: "important",
-		Help: "Desktop notifications from cswap auto: important (at-limit, failover, all exhausted, recovery), all (every switch too), or off",
+		Key:     "autoswitch.notify",
+		Kind:    KindChoice,
+		Choices: []string{"off", "important", "all"},
+		Default: "important",
+		Help:    "Desktop notifications from cswap auto: important (at-limit, failover, all exhausted, recovery), all (every switch too), or off",
 	},
 	{
-		Key: "ui.theme", Kind: KindChoice, Choices: []string{"dark", "light", "auto"}, Default: "auto",
+		Key: "ui.theme", Kind: KindChoice, Choices: []string{"dark", "light", Auto}, Default: Auto,
 		Help: "Color theme; auto follows the terminal background",
 	},
 }
@@ -169,7 +182,7 @@ func ResolveModelNames(models []string) []string {
 	for _, m := range models {
 		switch strings.ToLower(m) {
 		case "none":
-		case "auto":
+		case Auto:
 			add(claudecfg.ActiveModel())
 		default:
 			add(m)
@@ -283,7 +296,8 @@ func ParseStrict(key, value string) (any, error) {
 	switch spec.Kind {
 	case KindFloat, KindInt:
 		f, err := strconv.ParseFloat(value, 64)
-		if err != nil {
+		// NaN parses, and compares false against both bounds.
+		if err != nil || math.IsNaN(f) {
 			return nil, fmt.Errorf("%s must be a number", key)
 		}
 		if f < spec.Lo || f > spec.Hi {
@@ -305,6 +319,11 @@ func ParseStrict(key, value string) (any, error) {
 		v := strings.TrimSpace(value)
 		if v == "" {
 			return nil, fmt.Errorf("%s cannot be empty", key)
+		}
+		// settings.json is JSON: invalid UTF-8 would be stored as U+FFFD,
+		// not as what was typed.
+		if !utf8.ValidString(v) {
+			return nil, fmt.Errorf("%s must be valid UTF-8", key)
 		}
 		return v, nil
 	case KindChoice:

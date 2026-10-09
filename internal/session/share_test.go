@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package session
 
 import (
@@ -167,11 +170,17 @@ func TestShareHistoryWaitsForQuiescence(t *testing.T) {
 	if raw, _ := os.ReadFile(filepath.Join(dir, "history.jsonl")); string(raw) != "mine\n" {
 		t.Fatal("history moved under a live session")
 	}
-	if !slices.ContainsFunc(notes, func(n string) bool { return strings.Contains(n, "another session is using this profile") }) {
+	if !slices.ContainsFunc(
+		notes,
+		func(n string) bool { return strings.Contains(n, "another session is using this profile") },
+	) {
 		t.Fatalf("notes = %v", notes)
 	}
 	// projects/ had nothing to merge, so it is linked (and created) anyway.
-	if fi, err := os.Stat(filepath.Join(os.Getenv("HOME"), ".claude", "projects")); err != nil || fi.Mode().Perm() != 0o700 {
+	if fi, err := os.Stat(
+		filepath.Join(os.Getenv("HOME"), ".claude", "projects"),
+	); err != nil ||
+		fi.Mode().Perm() != 0o700 {
 		t.Fatalf("share source not created private: %v %v", fi, err)
 	}
 	if !isSymlink(filepath.Join(dir, "projects")) {

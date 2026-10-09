@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 // Package session manages the per-account Claude Code profiles that
 // `cswap run` launches: <backup root>/sessions/<slot>-<email slug>/, used as
 // CLAUDE_CONFIG_DIR so one terminal runs as a stored account while the
@@ -360,7 +363,8 @@ func Remove(dir string) error {
 // projects and history). The caller holds cswap's lock.
 func Bootstrap(dir, cred string, configBackup []byte) error {
 	var cfg map[string]json.RawMessage
-	if json.Unmarshal(configBackup, &cfg) != nil || len(cfg["oauthAccount"]) == 0 || string(cfg["oauthAccount"]) == "null" {
+	if json.Unmarshal(configBackup, &cfg) != nil || len(cfg["oauthAccount"]) == 0 ||
+		string(cfg["oauthAccount"]) == "null" {
 		return errors.New("no stored config backup with an oauthAccount")
 	}
 	// Claude Code reads the Keychain before the file; a stale item from an

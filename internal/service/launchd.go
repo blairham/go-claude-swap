@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package service
 
 import (
@@ -78,7 +81,12 @@ func installLaunchd(exe string, extraArgs []string) (string, error) {
 			return "", fmt.Errorf("launchctl could not load %s: %w", path, err)
 		}
 	}
-	return fmt.Sprintf("Installed LaunchAgent %s\n  plist: %s\n  log:   %s\nIt runs at login, restarts on crash, and survives reboots.", Label, path, LogPath()), nil
+	return fmt.Sprintf(
+		"Installed LaunchAgent %s\n  plist: %s\n  log:   %s\nIt runs at login, restarts on crash, and survives reboots.",
+		Label,
+		path,
+		LogPath(),
+	), nil
 }
 
 func uninstallLaunchd() (string, error) {

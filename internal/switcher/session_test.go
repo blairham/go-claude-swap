@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package switcher
 
 import (
@@ -56,7 +59,11 @@ func sessionAccounts(t *testing.T) string {
 func markLive(t *testing.T, dir string) {
 	t.Helper()
 	os.MkdirAll(filepath.Join(dir, "sessions"), 0o700)
-	if err := os.WriteFile(filepath.Join(dir, "sessions", "x.json"), fmt.Appendf(nil, `{"pid": %d}`, os.Getpid()), 0o600); err != nil {
+	if err := os.WriteFile(
+		filepath.Join(dir, "sessions", "x.json"),
+		fmt.Appendf(nil, `{"pid": %d}`, os.Getpid()),
+		0o600,
+	); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -317,12 +324,20 @@ func TestTokenStatusLines(t *testing.T) {
 	}
 
 	os.WriteFile(filepath.Join(dir, ".claude.json"), []byte(`{"oauthAccount":{"emailAddress":"other@x.co"}}`), 0o600)
-	if lines = TokenStatusLines(inactive, now); len(lines) != 2 || lines[0] != "session profile: ignored (different account)" {
+	if lines = TokenStatusLines(
+		inactive,
+		now,
+	); len(lines) != 2 ||
+		lines[0] != "session profile: ignored (different account)" {
 		t.Fatalf("drifted profile: %q", lines)
 	}
 
 	active := Snapshot{Slot: 2, Account: seq.Get(2), Active: true}
-	if lines = TokenStatusLines(active, now); len(lines) != 1 || !strings.HasPrefix(lines[0], "active profile: fresh, refresh token yes") {
+	if lines = TokenStatusLines(
+		active,
+		now,
+	); len(lines) != 1 ||
+		!strings.HasPrefix(lines[0], "active profile: fresh, refresh token yes") {
 		t.Fatalf("active: %q", lines)
 	}
 }

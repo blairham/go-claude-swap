@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
 package tui
 
 import (
@@ -101,7 +104,9 @@ func cardBars(pal palette, snap *switcher.Snapshot, width int, threshold float64
 		u = snap.LastGood
 	}
 	if u == nil {
-		return []string{strings.Repeat(" ", bodyIndent) + lipgloss.NewStyle().Foreground(pal.Muted).Render("usage unavailable")}
+		return []string{
+			strings.Repeat(" ", bodyIndent) + lipgloss.NewStyle().Foreground(pal.Muted).Render("usage unavailable"),
+		}
 	}
 	rows := buildRows(u)
 	labelW := 2

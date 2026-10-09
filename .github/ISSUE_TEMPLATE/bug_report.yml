@@ -1,0 +1,62 @@
+name: Bug report
+description: Something cswap did that it should not have
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **If a token reached a log, the switch
+        history or the usage cache, a backup file was readable by another
+        user, or a switch destroyed a credential instead of stashing it,
+        that is a security issue** -- report it privately through
+        Security → Report a vulnerability, not here.
+
+        Never paste tokens, `.enc` backups, `cswap export` output or the
+        contents of `~/.claude.json`. Redact emails and organization IDs if
+        you prefer.
+  - type: input
+    id: version
+    attributes:
+      label: cswap version or commit
+      description: The output of `cswap --version`.
+    validations:
+      required: true
+  - type: dropdown
+    id: part
+    attributes:
+      label: Which part?
+      options:
+        - switch, add or remove (roster)
+        - cswap auto or the service
+        - cswap run (session mode) or map
+        - usage, list or status
+        - TUI
+        - login, relogin or add-token
+        - export or import
+        - Homebrew formula or brew services
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system and install method
+      description: e.g. macOS 15 / Homebrew, Ubuntu 24.04 / go install
+    validations:
+      required: true
+  - type: input
+    id: claude
+    attributes:
+      label: Claude Code version
+      description: The output of `claude --version`.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect instead?
+      description: The command you ran, or the keys you pressed in which view.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output or logs (redacted)
+      render: shell

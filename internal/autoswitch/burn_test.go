@@ -83,8 +83,8 @@ func TestProjectedTriggerClassification(t *testing.T) {
 	if !proactiveLike(triggerProjected) {
 		t.Fatal("a projected switch is discretionary and must honor the cooldown")
 	}
-	res := e.blockedOutcome(triggerProjected, &switcher.Snapshot{Slot: 8}, hp(15), []candidate{cand(2, hp(12))})
-	if !res.pressing {
+	res := e.nothingRanked(triggerProjected, &switcher.Snapshot{Slot: 8}, hp(15), []candidate{cand(2, hp(12))}, time.Now())
+	if !res.keepPolling {
 		t.Fatal("projected and nothing qualifies: keep polling, do not back off")
 	}
 }

@@ -38,8 +38,8 @@ func EngineRunning() bool {
 // Run ticks forever until ctx is canceled, then returns nil. Normal ticks
 // are spaced by the configured interval with ±10% jitter; a Blocked tick
 // with a known recovery instant sleeps until just past that reset (never
-// beyond maxRecoveryWait), a Blocked tick whose active account is already
-// past the threshold keeps the normal interval, and any other Blocked tick
+// beyond maxRecoveryWait), a Blocked tick whose active account still has
+// headroom keeps the normal interval, and any other Blocked tick
 // backs off to at least 5 minutes. A sleep event is emitted whenever the
 // delay exceeds 1.5×interval.
 func (e *Engine) Run(ctx context.Context) error {
@@ -91,7 +91,7 @@ const (
 
 // delayAfter computes the next sleep in seconds.
 func (e *Engine) delayAfter(res tickResult, now time.Time) float64 {
-	if res.outcome == OutcomeBlocked && !res.pressing {
+	if res.outcome == OutcomeBlocked && !res.keepPolling {
 		if res.recoverAt > 0 {
 			d := float64(res.recoverAt) + recoveryMargin - float64(now.Unix())
 			return math.Min(math.Max(d, e.Interval), maxRecoveryWait)

@@ -56,6 +56,9 @@ type Result struct {
 // Add captures the current Claude Code login as a managed account. slot 0
 // means auto-assign; alias "" means none.
 func Add(slot int, alias string) (int, string, error) {
+	if err := refuseSessionShell(); err != nil {
+		return 0, "", err
+	}
 	if err := paths.EnsureDirs(); err != nil {
 		return 0, "", err
 	}
@@ -191,6 +194,9 @@ func SwitchToFrom(selector string, force bool, origin Origin) (*Result, error) {
 
 // Rotate advances to the next switchable account in sequence order.
 func Rotate() (*Result, error) {
+	if err := refuseSessionShell(); err != nil {
+		return nil, err
+	}
 	origin := Origin{Trigger: "rotate", Source: "cli"}
 	seq, err := account.Load()
 	if err != nil {
@@ -258,6 +264,9 @@ func Switchable(slot int, a *account.Account) bool {
 // classifies and preserves the outgoing credential, activates the target,
 // and rolls back on failure.
 func performSwitch(seq *account.Sequence, target int, force bool, origin Origin) (*Result, error) {
+	if err := refuseSessionShell(); err != nil {
+		return nil, err
+	}
 	targetAcct := seq.Get(target)
 	if targetAcct == nil {
 		return nil, fmt.Errorf("no account in slot %d", target)
@@ -623,6 +632,9 @@ func Remove(selector string) (int, string, error) {
 // removed identity are pruned too: the identity has left the roster for
 // good, and a later account re-added under the same email gets new mappings.
 func RemoveAccount(selector string) (*Removed, error) {
+	if err := refuseSessionShell(); err != nil {
+		return nil, err
+	}
 	seq, err := account.Load()
 	if err != nil {
 		return nil, err
@@ -691,6 +703,9 @@ func SetDisabled(selector string, disabled bool) (int, string, error) {
 
 // SetAlias sets or clears (alias "") an account's alias.
 func SetAlias(selector, alias string) (int, string, error) {
+	if err := refuseSessionShell(); err != nil {
+		return 0, "", err
+	}
 	seq, err := account.Load()
 	if err != nil {
 		return 0, "", err
@@ -719,6 +734,9 @@ func SetAlias(selector, alias string) (int, string, error) {
 
 // Move relocates an account to a slot, swapping if the slot is occupied.
 func Move(selector string, targetSlot int) (swapped bool, otherEmail string, err error) {
+	if err := refuseSessionShell(); err != nil {
+		return false, "", err
+	}
 	if targetSlot < 1 {
 		return false, "", errors.New("target slot must be >= 1")
 	}

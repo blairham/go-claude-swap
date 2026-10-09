@@ -325,3 +325,45 @@ func relocateProfiles(moves map[int]int, accts map[int]*account.Account) error {
 	}
 	return errors.Join(errs...)
 }
+
+// ErrSessionShell refuses an account change from inside a `cswap run`
+// session.
+var ErrSessionShell = errors.New("this shell is inside a cswap run session profile (CLAUDE_CONFIG_DIR points at it); changing accounts here would operate on the wrong live store — unset CLAUDE_CONFIG_DIR or run from a normal shell")
+
+// refuseSessionShell guards every entry point that changes the roster or the
+// live store. A CLAUDE_CONFIG_DIR inside <backup>/sessions/ means this shell
+// is a session: its "live store" is the profile, not the default login, so
+// a switch or add would splice the roster against the wrong credential, and
+// a remove could delete the profile of the very shell it runs in. There is
+// no single chokepoint to hang this on, hence one call per entry point.
+func refuseSessionShell() error {
+	cfg := os.Getenv("CLAUDE_CONFIG_DIR")
+	if cfg == "" {
+		return nil
+	}
+	rel, err := filepath.Rel(resolvePath(paths.SessionsDir()), resolvePath(cfg))
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return nil
+	}
+	return ErrSessionShell
+}
+
+// resolvePath makes p absolute and resolves symlinks in as much of it as
+// exists (like Python's Path.resolve), so a profile reached through a
+// symlinked $HOME is still recognized.
+func resolvePath(p string) string {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return filepath.Clean(p)
+	}
+	var tail []string
+	for cur := abs; ; cur = filepath.Dir(cur) {
+		if r, err := filepath.EvalSymlinks(cur); err == nil {
+			return filepath.Join(append([]string{r}, tail...)...)
+		}
+		if filepath.Dir(cur) == cur {
+			return abs
+		}
+		tail = append([]string{filepath.Base(cur)}, tail...)
+	}
+}

@@ -178,8 +178,9 @@ type Live struct {
 func (l Live) Busy() bool { return len(l.PIDs) > 0 || l.Unreadable > 0 }
 
 // ScanLive reads the PID records Claude Code writes into a profile and keeps
-// those whose process is alive. A recycled PID reads as live, which only
-// ever makes a guard more cautious.
+// those whose process is alive and is still the Claude Code that wrote the
+// record (see pidMatchesRecord): a crashed instance leaves its record
+// behind, and the OS may hand the number to something else.
 func ScanLive(dir string) Live {
 	var l Live
 	entries, err := os.ReadDir(filepath.Join(dir, "sessions"))
@@ -192,17 +193,37 @@ func ScanLive(dir string) Live {
 		}
 		raw, err := os.ReadFile(filepath.Join(dir, "sessions", e.Name()))
 		var rec struct {
-			PID *int64 `json:"pid"`
+			PID       *int64          `json:"pid"`
+			ProcStart json.RawMessage `json:"procStart"`
 		}
 		if err != nil || json.Unmarshal(raw, &rec) != nil || rec.PID == nil {
 			l.Unreadable++
 			continue
 		}
-		if pid := int(*rec.PID); processAlive(pid) {
+		procStart, ok := procStartField(rec.ProcStart)
+		if !ok {
+			l.Unreadable++
+			continue
+		}
+		if pid := int(*rec.PID); processAlive(pid) && pidMatchesRecord(pid, procStart) {
 			l.PIDs = append(l.PIDs, pid)
 		}
 	}
 	return l
+}
+
+// procStartField reads a record's procStart: absent or null is "", a
+// string is itself, and anything else makes the record unreadable (as it
+// does for claude-swap).
+func procStartField(raw json.RawMessage) (string, bool) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return "", true
+	}
+	var s string
+	if json.Unmarshal(raw, &s) != nil {
+		return "", false
+	}
+	return s, true
 }
 
 // Quiescent reports that nothing runs in the profile and every record was

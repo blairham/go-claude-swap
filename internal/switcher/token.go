@@ -40,6 +40,9 @@ type TokenResult struct {
 // an API key is stored raw, the config backup is a bare personal oauthAccount,
 // and an API-key roster row carries "kind": "api_key".
 func AddToken(token, email string, slot int) (*TokenResult, error) {
+	if err := refuseSessionShell(); err != nil {
+		return nil, err
+	}
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return nil, errors.New("token cannot be empty")

@@ -1,14 +1,17 @@
 package switcher
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/blairham/go-claude-swap/internal/account"
 	"github.com/blairham/go-claude-swap/internal/credentials"
+	"github.com/blairham/go-claude-swap/internal/paths"
 	"github.com/blairham/go-claude-swap/internal/session"
 )
 
@@ -248,5 +251,78 @@ func TestRemoveAndMoveCarrySessionProfiles(t *testing.T) {
 	}
 	if _, err := os.Stat(moved); err == nil {
 		t.Fatal("profile survived account removal")
+	}
+}
+
+// TestSessionShellGuard: inside a `cswap run` shell (CLAUDE_CONFIG_DIR in
+// <backup>/sessions/, however spelled) every roster or live-store change
+// is refused; a CLAUDE_CONFIG_DIR elsewhere is not.
+func TestSessionShellGuard(t *testing.T) {
+	sessionAccounts(t)
+	dir := session.Dir(1, "a@b.co")
+	os.MkdirAll(dir, 0o700)
+	resolved, _ := filepath.EvalSymlinks(dir)
+
+	ops := map[string]func() error{
+		"add":       func() error { _, _, err := Add(0, ""); return err },
+		"switch":    func() error { _, err := SwitchTo("1", false); return err },
+		"rotate":    func() error { _, err := Rotate(); return err },
+		"remove":    func() error { _, err := RemoveAccount("1"); return err },
+		"alias":     func() error { _, _, err := SetAlias("1", "work"); return err },
+		"move":      func() error { _, _, err := Move("1", 5); return err },
+		"add-token": func() error { _, err := AddToken("sk-ant-oat01-x", "", 0); return err },
+	}
+	for _, cfg := range []string{dir, resolved + string(filepath.Separator), filepath.Join(paths.SessionsDir(), "9-gone", "deeper")} {
+		t.Setenv("CLAUDE_CONFIG_DIR", cfg)
+		for name, op := range ops {
+			if err := op(); !errors.Is(err, ErrSessionShell) {
+				t.Errorf("CLAUDE_CONFIG_DIR=%s: %s was not refused: %v", cfg, name, err)
+			}
+		}
+	}
+
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	if _, _, err := SetAlias("1", "work"); err != nil {
+		t.Fatalf("an unrelated CLAUDE_CONFIG_DIR was refused: %v", err)
+	}
+	t.Setenv("CLAUDE_CONFIG_DIR", paths.SessionsDir()+"-other")
+	if err := refuseSessionShell(); err != nil {
+		t.Fatal("a sibling of the sessions dir was refused")
+	}
+}
+
+// TestTokenStatusLines: an inactive account shows its session profile's
+// token beside the stored backup (ignored when the profile was re-pointed),
+// and the active account shows the live login's.
+func TestTokenStatusLines(t *testing.T) {
+	sessionAccounts(t)
+	seq, _ := account.Load()
+	now := time.Now()
+	inactive := Snapshot{Slot: 1, Account: seq.Get(1)}
+
+	lines := TokenStatusLines(inactive, now)
+	if len(lines) != 1 || !strings.HasPrefix(lines[0], "stored backup: fresh, refresh token yes, expires ") {
+		t.Fatalf("no profile: %q", lines)
+	}
+
+	dir := session.Dir(1, "a@b.co")
+	cfg := []byte(`{"oauthAccount":{"emailAddress":"a@b.co"}}`)
+	if err := session.Bootstrap(dir, credExp("at-a2", "", now.Add(-time.Hour).UnixMilli()), cfg); err != nil {
+		t.Fatal(err)
+	}
+	lines = TokenStatusLines(inactive, now)
+	if len(lines) != 2 || !strings.HasPrefix(lines[0], "session profile: expired, refresh token no, expires ") ||
+		!strings.HasPrefix(lines[1], "stored backup: ") {
+		t.Fatalf("with profile: %q", lines)
+	}
+
+	os.WriteFile(filepath.Join(dir, ".claude.json"), []byte(`{"oauthAccount":{"emailAddress":"other@x.co"}}`), 0o600)
+	if lines = TokenStatusLines(inactive, now); len(lines) != 2 || lines[0] != "session profile: ignored (different account)" {
+		t.Fatalf("drifted profile: %q", lines)
+	}
+
+	active := Snapshot{Slot: 2, Account: seq.Get(2), Active: true}
+	if lines = TokenStatusLines(active, now); len(lines) != 1 || !strings.HasPrefix(lines[0], "active profile: fresh, refresh token yes") {
+		t.Fatalf("active: %q", lines)
 	}
 }

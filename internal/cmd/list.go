@@ -19,7 +19,8 @@ type ListCommand struct {
 
 // ListFlags for cswap list.
 type ListFlags struct {
-	JSON bool `long:"json" description:"Emit machine-readable JSON"`
+	JSON        bool `long:"json" description:"Emit machine-readable JSON"`
+	TokenStatus bool `long:"token-status" description:"Show source-labeled OAuth token diagnostics"`
 }
 
 // Help text.
@@ -29,7 +30,10 @@ func (c *ListCommand) Help() string {
 List every managed account with its rate-limit usage and reset times.
 
 Options:
-  --json  Emit machine-readable JSON
+  --json          Emit machine-readable JSON
+  --token-status  Show source-labeled OAuth token diagnostics under each
+                  account: the active login's token, or a stored account's
+                  session profile (from 'cswap run') and stored backup
 `
 }
 
@@ -44,6 +48,11 @@ func (c *ListCommand) Run(args []string) int {
 	_, stop, code := parseFlags(c.UI, c.Help(), &opts, args)
 	if stop {
 		return code
+	}
+
+	if opts.JSON && opts.TokenStatus {
+		c.UI.Error("Error: --token-status cannot be combined with --json")
+		return 1
 	}
 
 	seq, err := account.Load()
@@ -102,6 +111,11 @@ func (c *ListCommand) Run(args []string) int {
 				note += " (" + s.LastErr + ")"
 			}
 			c.UI.Output("     └ " + note)
+		}
+		if opts.TokenStatus {
+			for _, l := range switcher.TokenStatusLines(s, now) {
+				c.UI.Output("     • " + l)
+			}
 		}
 		c.UI.Output("")
 	}

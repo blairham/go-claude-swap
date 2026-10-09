@@ -3,7 +3,6 @@ package service
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -54,7 +53,7 @@ func installSystemd(exe string, extraArgs []string) (string, error) {
 		{"daemon-reload"},
 		{"enable", "--now", unitName},
 	} {
-		if out, err := exec.Command("systemctl", append([]string{"--user"}, args...)...).CombinedOutput(); err != nil {
+		if out, err := run("systemctl", append([]string{"--user"}, args...)...); err != nil {
 			return "", fmt.Errorf("systemctl --user %s: %s: %w", strings.Join(args, " "), strings.TrimSpace(string(out)), err)
 		}
 	}
@@ -64,11 +63,11 @@ func installSystemd(exe string, extraArgs []string) (string, error) {
 }
 
 func uninstallSystemd() (string, error) {
-	_ = exec.Command("systemctl", "--user", "disable", "--now", unitName).Run()
+	_, _ = run("systemctl", "--user", "disable", "--now", unitName)
 	if err := os.Remove(unitPath()); err != nil && !os.IsNotExist(err) {
 		return "", err
 	}
-	_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
+	_, _ = run("systemctl", "--user", "daemon-reload")
 	return "Uninstalled systemd user unit " + unitName, nil
 }
 
@@ -76,7 +75,7 @@ func statusSystemd() (string, error) {
 	if _, err := os.Stat(unitPath()); err != nil {
 		return "not installed", nil
 	}
-	out, _ := exec.Command("systemctl", "--user", "is-active", unitName).Output()
+	out, _ := run("systemctl", "--user", "is-active", unitName)
 	state := strings.TrimSpace(string(out))
 	if state == "" {
 		state = "unknown"

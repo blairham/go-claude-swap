@@ -4,7 +4,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -66,14 +65,14 @@ func installLaunchd(exe string, extraArgs []string) (string, error) {
 		return "", err
 	}
 	// Stop a previous generation first so launchd reloads the new plist.
-	_ = exec.Command("launchctl", "bootout", domainTarget()+"/"+Label).Run()
+	_, _ = run("launchctl", "bootout", domainTarget()+"/"+Label)
 
 	if err := account.WriteFileAtomic(path, []byte(RenderPlist(exe, extraArgs)), 0o644); err != nil {
 		return "", err
 	}
 	// Modern interface first; fall back to the legacy one for older macOS.
-	if err := exec.Command("launchctl", "bootstrap", domainTarget(), path).Run(); err != nil {
-		if lerr := exec.Command("launchctl", "load", "-w", path).Run(); lerr != nil {
+	if _, err := run("launchctl", "bootstrap", domainTarget(), path); err != nil {
+		if _, lerr := run("launchctl", "load", "-w", path); lerr != nil {
 			return "", fmt.Errorf("launchctl could not load %s: %w", path, err)
 		}
 	}
@@ -82,7 +81,7 @@ func installLaunchd(exe string, extraArgs []string) (string, error) {
 
 func uninstallLaunchd() (string, error) {
 	path := plistPath()
-	_ = exec.Command("launchctl", "bootout", domainTarget()+"/"+Label).Run()
+	_, _ = run("launchctl", "bootout", domainTarget()+"/"+Label)
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return "", err
 	}
@@ -93,18 +92,11 @@ func statusLaunchd() (string, error) {
 	if _, err := os.Stat(plistPath()); err != nil {
 		return "not installed", nil
 	}
-	out, err := exec.Command("launchctl", "print", domainTarget()+"/"+Label).Output()
+	out, err := run("launchctl", "print", domainTarget()+"/"+Label)
 	if err != nil {
 		return "installed but not loaded (log: " + LogPath() + ")", nil
 	}
-	parts := []string{"loaded"}
-	for line := range strings.SplitSeq(string(out), "\n") {
-		l := strings.TrimSpace(line)
-		if strings.HasPrefix(l, "state =") || strings.HasPrefix(l, "pid =") {
-			parts = append(parts, l)
-		}
-	}
-	return strings.Join(parts, ", ") + " (log: " + LogPath() + ")", nil
+	return launchdSummary(out), nil
 }
 
 func domainTarget() string {

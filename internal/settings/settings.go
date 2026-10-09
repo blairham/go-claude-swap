@@ -63,8 +63,8 @@ var Registry = []Spec{
 		Help: "A target must beat the active account by this many pct",
 	},
 	{
-		Key: "autoswitch.strategy", Kind: KindChoice, Choices: []string{"best", "consume-first"}, Default: "best",
-		Help: "How auto-switch picks the target account",
+		Key: "autoswitch.strategy", Kind: KindChoice, Choices: []string{"best", "consume-first", "balance"}, Default: "best",
+		Help: "How auto-switch picks the target account (balance paces weekly usage across accounts)",
 	},
 	{
 		Key: "autoswitch.includeApiKeyAccounts", Kind: KindBool, Default: false,

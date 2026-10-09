@@ -40,7 +40,7 @@ type Record struct {
 	TS      string `json:"ts"` // UTC, account.TimeFormat
 	From    *Ref   `json:"from"`
 	To      Ref    `json:"to"`
-	Trigger string `json:"trigger"` // manual, rotate, proactive, at-limit, failover, consume-first
+	Trigger string `json:"trigger"` // manual, rotate, proactive, at-limit, failover, consume-first, least-bad, projected, balance
 	Source  string `json:"source"`  // cli, tui, auto
 	// ActiveUtilizationPct is the outgoing account's binding utilization at
 	// switch time; nil when it was not known.

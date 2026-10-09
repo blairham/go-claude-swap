@@ -30,7 +30,7 @@ type AutoFlags struct {
 	Interval  float64 `long:"interval" description:"Poll interval in seconds"`
 	Threshold float64 `long:"threshold" description:"Switch threshold percent"`
 	Cooldown  float64 `long:"cooldown" description:"Minimum seconds between proactive switches"`
-	Strategy  string  `long:"strategy" choice:"best" choice:"consume-first" description:"Target selection strategy"`
+	Strategy  string  `long:"strategy" choice:"best" choice:"consume-first" choice:"balance" description:"Target selection strategy"`
 	Model     string  `long:"model" description:"Comma-separated model display names, 'auto', 'all', or 'none'"`
 	LogFile   string  `long:"log-file" description:"Append events to this file, rotated by size, instead of stdout"`
 	Verbose   bool    `long:"verbose" description:"Log every poll, not only changes and an hourly heartbeat"`
@@ -55,7 +55,7 @@ Options:
       --interval SECS    Poll interval (default from settings)
       --threshold PCT    Switch threshold (default 90)
       --cooldown SECS    Minimum seconds between proactive switches
-      --strategy NAME    best | consume-first
+      --strategy NAME    best | consume-first | balance
       --model NAMES      Model weekly limits to watch: names (Fable,Opus),
                          auto (Claude Code's model), all, or none
       --log-file PATH    Write events to PATH instead of stdout, rotating it

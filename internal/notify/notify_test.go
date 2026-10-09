@@ -2,6 +2,7 @@ package notify
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -16,7 +17,7 @@ func TestCommandDarwinPinsOsascriptAndPassesTextAsArgs(t *testing.T) {
 		t.Errorf("args = %q", args)
 	}
 	for i, a := range args {
-		if a == "-e" && (args[i+1] == title || args[i+1] == body) {
+		if a == "-e" && (strings.Contains(args[i+1], title) || strings.Contains(args[i+1], body)) {
 			t.Errorf("text spliced into script: %q", args)
 		}
 	}

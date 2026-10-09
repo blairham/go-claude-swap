@@ -72,6 +72,18 @@ func GlobalConfigPath() string {
 	return filepath.Join(base, ".claude.json")
 }
 
+// DefaultGlobalConfigPath is the default profile's global config, ignoring
+// CLAUDE_CONFIG_DIR: ~/.claude/.config.json if it exists (legacy), else
+// ~/.claude.json. Session sharing mirrors the user's real profile from it,
+// and must not source from another session when run inside one.
+func DefaultGlobalConfigPath() string {
+	legacy := filepath.Join(home(), ".claude", ".config.json")
+	if _, err := os.Stat(legacy); err == nil {
+		return legacy
+	}
+	return filepath.Join(home(), ".claude.json")
+}
+
 // CredentialsFilePath is the plaintext credential file used on non-macOS
 // platforms (and as a macOS fallback).
 func CredentialsFilePath() string {

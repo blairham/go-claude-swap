@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -29,6 +30,7 @@ type RunCommand struct {
 // RunFlags for cswap run.
 type RunFlags struct {
 	NoShare        bool `long:"no-share" description:"Don't share ~/.claude customizations into the session profile"`
+	ShareHistory   bool `long:"share-history" description:"Share ~/.claude conversation history (projects/, history.jsonl) with the session"`
 	RequireSession bool `long:"require-session" description:"Refuse to launch on the default login"`
 }
 
@@ -48,16 +50,28 @@ an unmapped directory launches plain claude on the default login.
 By default settings.json, keybindings.json, CLAUDE.md, skills/, commands/
 and agents/ from ~/.claude are linked into the profile. Variables that
 would override the account (ANTHROPIC_API_KEY and friends) are dropped for
-the session.
+the session. User-scope MCP servers (mcpServers in ~/.claude.json) are
+mirrored into the profile; definitions the profile had of its own are saved
+once to .cswap-mcp-displaced.json in the profile.
+
+--share-history additionally links ~/.claude/projects (what 'claude
+--resume' lists) and ~/.claude/history.jsonl, so every account sees one
+conversation history. History the profile already accumulated is merged
+into ~/.claude first (only while no Claude Code runs in the profile).
+Not supported on Windows.
 
 Examples:
   cswap run 2
   cswap run work -- --resume
+  cswap run 2 --share-history
   cswap run                           # use this directory's mapping
 
 Options:
-      --no-share         Don't share ~/.claude customizations into the
-                         profile (and remove previously shared ones)
+      --no-share         Don't share ~/.claude customizations or MCP
+                         servers into the profile (and remove previously
+                         shared ones)
+      --share-history    Share ~/.claude conversation history with the
+                         profile
       --require-session  Refuse to launch when the account is already the
                          default login, instead of running plain claude on it
 `
@@ -81,6 +95,11 @@ func (c *RunCommand) Run(args []string) int {
 	}
 	if len(remaining) > 1 {
 		c.UI.Error("Error: unexpected arguments " + strings.Join(remaining[1:], " ") + " (pass claude's own arguments after --)")
+		return 1
+	}
+
+	if opts.ShareHistory && runtime.GOOS == "windows" {
+		c.UI.Error("Error: --share-history is not supported on Windows yet: sharing uses re-synced copies there, which would fork the history instead of sharing it.")
 		return 1
 	}
 
@@ -113,6 +132,7 @@ func (c *RunCommand) Run(args []string) int {
 
 	plan, err := switcher.PrepareSession(selector, switcher.SessionOptions{
 		Share:          !opts.NoShare,
+		ShareHistory:   opts.ShareHistory,
 		RequireSession: opts.RequireSession,
 	})
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -122,5 +123,41 @@ func TestRunRejectsStrayArguments(t *testing.T) {
 	ui := cli.NewMockUi()
 	if code := (&RunCommand{UI: ui}).Run([]string{"1", "--resume"}); code == 0 {
 		t.Fatal("claude flags before -- were accepted")
+	}
+}
+
+// TestRunSharesMCPAndHistory: the launched profile carries the default
+// login's user MCP servers, and --share-history links its history.
+func TestRunSharesMCPAndHistory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("history sharing is POSIX-only")
+	}
+	cmdEnv(t)
+	stubLaunch(t)
+	addAccount(t, "a@b.co")
+	addAccount(t, "c@d.co")
+	home, _ := os.UserHomeDir()
+	cfg, _ := json.Marshal(map[string]any{
+		"oauthAccount": map[string]any{"emailAddress": "c@d.co"},
+		"mcpServers":   map[string]any{"srv": map[string]any{"command": "x"}},
+	})
+	os.WriteFile(filepath.Join(home, ".claude.json"), cfg, 0o600)
+
+	ui := cli.NewMockUi()
+	if code := (&RunCommand{UI: ui}).Run([]string{"--share-history", "a@b.co"}); code != 0 {
+		t.Fatalf("exit %d: %s", code, ui.ErrorWriter.String())
+	}
+	dir := session.Dir(1, "a@b.co")
+	raw, _ := os.ReadFile(filepath.Join(dir, ".claude.json"))
+	var prof struct {
+		MCPServers map[string]any `json:"mcpServers"`
+	}
+	if json.Unmarshal(raw, &prof) != nil || prof.MCPServers["srv"] == nil {
+		t.Fatalf("MCP servers not mirrored: %s", raw)
+	}
+	for _, name := range []string{"projects", "history.jsonl"} {
+		if fi, err := os.Lstat(filepath.Join(dir, name)); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+			t.Fatalf("%s not linked: %v", name, err)
+		}
 	}
 }

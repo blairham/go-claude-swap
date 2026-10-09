@@ -72,7 +72,7 @@ cswap service install         # any install: launchd (macOS) / systemd --user (L
 | `cswap export` / `import` | Back up or migrate accounts between machines |
 | `cswap config [list\|get\|set\|unset\|path]` | Settings (threshold, strategy, cooldown, theme, …) |
 | `cswap unclaimed` | Credentials preserved from displaced logins |
-| `cswap run [N\|alias\|email] [--no-share] [--require-session] [-- ARGS]` | Run Claude Code as an account in this terminal only, in its own profile; bare `run` uses the directory's mapping |
+| `cswap run [N\|alias\|email] [--no-share] [--share-history] [--require-session] [-- ARGS]` | Run Claude Code as an account in this terminal only, in its own profile; bare `run` uses the directory's mapping |
 | `cswap map [N\|alias\|email [PATH]]` / `unmap [PATH]` | Map a directory (and everything below it) to an account; bare `map` lists mappings. Shared with the Python claude-swap via `mappings.json` |
 | `cswap history [--since 7d] [--limit N] [--json]` | Recorded switches — manual and automatic — with trigger, utilization, and reason |
 
@@ -114,6 +114,10 @@ JSONL events.
   profile (or flags it while it is running), and a token Claude Code rotated
   inside a quiescent profile is adopted back into the backup before cswap
   would otherwise switch to, refresh, or poll with the older generation.
+  Customizations from `~/.claude` are linked in and the default login's
+  user-scope MCP servers are mirrored into the profile (unless
+  `--no-share`); `--share-history` also links `~/.claude`'s conversation
+  history, merging the profile's own history into it first.
 - **Service ⟷ TUI over gRPC**: a looping `cswap auto` serves a control API
   (`pkg/swapapi`) on a unix socket in the backup root. The TUI connects to
   it for status, streams switch events live, and goes store-only while the
@@ -164,8 +168,11 @@ cswap config set ui.theme light
 ## Not (yet) ported
 
 The macOS menubar extra, and the deepest edge-case machinery of the original
-(consume-gate CAS persistence, provenance oracle probing). Session mode does
-not yet mirror `mcpServers` into profiles or offer `--share-history`.
+(consume-gate CAS persistence, provenance oracle probing). In session mode,
+the PID-reuse check on session records, the session-shell guard, `cswap
+list`'s session-profile token line, and the consume-gate refresh before a
+profile is seeded (the switch path's refresh-near-expiry is used instead)
+are not yet ported (#36).
 
 ## Development
 

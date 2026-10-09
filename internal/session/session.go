@@ -56,9 +56,9 @@ const (
 // user customizations only, never anything account- or instance-scoped.
 var SharedItems = []string{"settings.json", "keybindings.json", "CLAUDE.md", "skills", "commands", "agents"}
 
-// historyItems are what claude-swap's --share-history links. They are only
-// recognized here (so a manifest naming them is honored on --no-share), not
-// created.
+// historyItems are linked additionally under --share-history: conversation
+// transcripts (what `claude --resume` lists) and prompt history, so every
+// account sees one history. POSIX only.
 var historyItems = []string{"projects", "history.jsonl"}
 
 // AuthOverrideEnv are variables that make Claude Code bypass account OAuth.

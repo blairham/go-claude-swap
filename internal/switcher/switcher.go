@@ -22,6 +22,7 @@ import (
 	"github.com/blairham/go-claude-swap/internal/claudecfg"
 	"github.com/blairham/go-claude-swap/internal/credentials"
 	"github.com/blairham/go-claude-swap/internal/locks"
+	"github.com/blairham/go-claude-swap/internal/mappings"
 	"github.com/blairham/go-claude-swap/internal/oauth"
 	"github.com/blairham/go-claude-swap/internal/paths"
 	"github.com/blairham/go-claude-swap/internal/usage"
@@ -519,24 +520,68 @@ func recoverFromPrev(slot int, email, deadCred string) (string, string, bool) {
 	return string(raw), warn, true
 }
 
+// Removed reports a completed account removal.
+type Removed struct {
+	Slot  int
+	Email string
+	// PrunedMappings counts directory mappings dropped because they pointed
+	// at the removed identity.
+	PrunedMappings int
+	// Warning is set when the removal succeeded but its mappings could not
+	// be pruned (an unreadable mappings.json is left untouched).
+	Warning string
+}
+
 // Remove deletes an account: stored credentials, config backup, roster row.
 func Remove(selector string) (int, string, error) {
-	seq, err := account.Load()
+	r, err := RemoveAccount(selector)
 	if err != nil {
 		return 0, "", err
 	}
+	return r.Slot, r.Email, nil
+}
+
+// RemoveAccount is Remove with the full report. Directory mappings for the
+// removed identity are pruned too: the identity has left the roster for
+// good, and a later account re-added under the same email gets new mappings.
+func RemoveAccount(selector string) (*Removed, error) {
+	seq, err := account.Load()
+	if err != nil {
+		return nil, err
+	}
 	slot, err := seq.Resolve(selector)
 	if err != nil {
-		return 0, "", err
+		return nil, err
 	}
 	a := seq.Get(slot)
 	credentials.DeleteBackup(slot, a.Email)
 	os.Remove(paths.AccountConfigBackup(slot, a.Email))
 	seq.Remove(slot)
 	if err := seq.Save(); err != nil {
+		return nil, err
+	}
+	r := &Removed{Slot: slot, Email: a.Email}
+	n, perr := mappings.Open().PruneAccount(a.Email, a.OrganizationUUID)
+	if perr != nil {
+		r.Warning = fmt.Sprintf("could not prune directory mappings: %v", perr)
+	}
+	r.PrunedMappings = n
+	return r, nil
+}
+
+// SlotForDirectory resolves dir to the account mapped to it or its nearest
+// mapped ancestor. It returns (0, "", nil) when no mapping covers dir and
+// (0, email, nil) when one does but its account is no longer in the roster.
+func SlotForDirectory(dir string) (int, string, error) {
+	_, e, ok, err := mappings.Open().Resolve(dir)
+	if err != nil || !ok {
 		return 0, "", err
 	}
-	return slot, a.Email, nil
+	seq, err := account.Load()
+	if err != nil {
+		return 0, "", err
+	}
+	return seq.FindByIdentity(e.Email, e.OrganizationUUID), e.Email, nil
 }
 
 // SetDisabled holds an account out of (or returns it to) auto-rotation.

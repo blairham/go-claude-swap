@@ -71,6 +71,7 @@ cswap service install         # any install: launchd (macOS) / systemd --user (L
 | `cswap export` / `import` | Back up or migrate accounts between machines |
 | `cswap config [list\|get\|set\|unset\|path]` | Settings (threshold, strategy, cooldown, theme, …) |
 | `cswap unclaimed` | Credentials preserved from displaced logins |
+| `cswap map [N\|alias\|email [PATH]]` / `unmap [PATH]` | Map a directory (and everything below it) to an account; bare `map` lists mappings. Shared with the Python claude-swap via `mappings.json` |
 
 Most read commands take `--json` for scripting; `cswap auto --json` emits
 JSONL events.
@@ -124,9 +125,9 @@ cswap config set ui.theme light
 
 ## Not (yet) ported
 
-Session mode (`cswap run`), directory mappings, setup-token accounts
-(`add-token`), the macOS menubar extra, and the deepest edge-case machinery
-of the original (consume-gate CAS persistence, provenance oracle probing).
+Session mode (`cswap run`), setup-token accounts (`add-token`), the macOS
+menubar extra, and the deepest edge-case machinery of the original
+(consume-gate CAS persistence, provenance oracle probing).
 
 ## Development
 

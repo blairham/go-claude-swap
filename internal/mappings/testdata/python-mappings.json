@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "mappings": {
+    "/home/u/work": {
+      "email": "work@co.com",
+      "organizationUuid": "org-1",
+      "added": "2026-01-02T03:04:05Z"
+    },
+    "/home/u/work/client": {
+      "email": "jos\u00e9@x.com",
+      "organizationUuid": "",
+      "added": "2026-01-03T00:00:00Z"
+    }
+  }
+}

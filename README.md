@@ -62,7 +62,7 @@ cswap service install         # any install: launchd (macOS) / systemd --user (L
 | `cswap add [--slot N] [--alias NAME]` | Back up the current Claude Code login as a managed account |
 | `cswap add-token [--slot N] [--email E] [TOKEN\|-]` | Register an account from a `claude setup-token` token or an `sk-ant-api…` key, without a login on this machine |
 | `cswap login [N\|alias\|email]` / `relogin` | Re-authenticate an account (or add one) via the OAuth flow, without touching the live session |
-| `cswap list` / `ls` | All accounts with 5h/7d/per-model usage and reset times |
+| `cswap list` / `ls` `[--token-status]` | All accounts with 5h/7d/per-model usage and reset times; `--token-status` adds OAuth token diagnostics (active login, `cswap run` profile, stored backup) |
 | `cswap status` | Current account |
 | `cswap switch [N\|alias\|email] [--force]` | Switch accounts (bare = rotate) |
 | `cswap auto [--once] [--dry-run] [--json]` | Auto-switch when the binding window hits the threshold |
@@ -168,11 +168,10 @@ cswap config set ui.theme light
 ## Not (yet) ported
 
 The macOS menubar extra, and the deepest edge-case machinery of the original
-(consume-gate CAS persistence, provenance oracle probing). In session mode,
-the PID-reuse check on session records, the session-shell guard, `cswap
-list`'s session-profile token line, and the consume-gate refresh before a
-profile is seeded (the switch path's refresh-near-expiry is used instead)
-are not yet ported (#36).
+(consume-gate CAS persistence, provenance oracle probing). Because the
+consume gate is not ported, `cswap run` freshens a backup before seeding a
+profile through the switch path's refresh-near-expiry rather than the
+original's gated one-refresh-per-bootstrap (#36).
 
 ## Development
 

@@ -1,0 +1,12 @@
+# OSV ignores, read by osv-scanner and by OpenSSF Scorecard's Vulnerabilities
+# check. Every entry names why it does not apply; re-check it when the module
+# graph changes rather than letting it outlive its reason.
+
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+# golang.org/x/crypto/openpgp is deprecated, and this advisory covers every
+# x/crypto version with no fixed release. x/crypto is in go.mod only as an
+# indirect dependency (hashicorp/cli -> sprig -> x/crypto/bcrypt); neither
+# `go list -deps ./...` nor `go list -deps ./... tool` contains an openpgp
+# package, and govulncheck, which checks reachability, reports nothing.
+reason = "x/crypto/openpgp is not in cswap's build or tool graph; the advisory flags all x/crypto versions and has no fix"

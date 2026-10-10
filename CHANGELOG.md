@@ -11,6 +11,8 @@ file was added.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-10
+
 ### Changed
 
 - **License: go-claude-swap is now Apache-2.0** (it was MIT). Releases up
@@ -44,6 +46,8 @@ file was added.
 - Fuzz targets for the files and responses cswap parses: settings.json and
   `config set` values, sequence.json, mappings.json and the usage endpoint's
   response.
+- `osv-scanner.toml` records why GO-2026-5932 (x/crypto/openpgp) does not
+  apply: no openpgp package is in cswap's build or tool graph.
 
 ## [0.4.0] - 2026-10-09
 
@@ -110,7 +114,8 @@ file was added.
   auto-switch, roster management, export/import, the TUI, and
   `cswap service` with a gRPC control API the TUI attaches to.
 
-[Unreleased]: https://github.com/blairham/go-claude-swap/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/blairham/go-claude-swap/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/blairham/go-claude-swap/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/blairham/go-claude-swap/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/blairham/go-claude-swap/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/blairham/go-claude-swap/compare/v0.1.1...v0.2.0

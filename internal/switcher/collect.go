@@ -170,20 +170,19 @@ func (c *Collector) fill(snap *Snapshot, store *usage.Store, client *http.Client
 	// Refresh an expired inactive token before the usage call. The active
 	// account is Claude Code's to refresh.
 	if !snap.Active && !sessionOwned && oauth.Expired(blob.OAuth.ExpiresAt, now) && blob.OAuth.RefreshToken != "" {
-		outcome := oauth.Refresh(client, []byte(cred), time.Now)
+		outcome := ConsumeGrant(client, snap.Slot, a.Email, cred)
 		switch {
-		case outcome.Err == oauth.ErrNone:
-			if newRaw, merr := oauth.MarshalBlob(outcome.Blob); merr == nil {
-				// Best-effort persist: even if the write fails, the fetch
-				// below uses the successor we hold in memory.
-				_ = credentials.WriteBackup(snap.Slot, a.Email, string(newRaw))
-				cred = string(newRaw)
-				blob = outcome.Blob
-			}
 		case outcome.Err.Permanent():
-			c.recordAuthDead(snap, fp, now)
+			c.recordAuthDead(snap, outcome.ConsumedFP, now)
 			snap.Status = StatusReloginRequired
 			return
+		case outcome.Cred != "":
+			// The slot's current generation, or a successor the gate could
+			// not persist (stashed for the next pass): either way the live
+			// token for this fetch.
+			if nb, perr := oauth.ParseBlob([]byte(outcome.Cred)); perr == nil && nb.OAuth != nil {
+				cred, blob = outcome.Cred, nb
+			}
 		}
 		// Transient refresh failure: try the expired token anyway.
 	}
@@ -191,16 +190,16 @@ func (c *Collector) fill(snap *Snapshot, store *usage.Store, client *http.Client
 	u, ferr := usage.Fetch(client, blob.OAuth.AccessToken)
 	if ferr != nil && ferr.HTTPStatus == 401 && !snap.Active && !sessionOwned && blob.OAuth.RefreshToken != "" {
 		// One refresh + one retry on a 401.
-		outcome := oauth.Refresh(client, []byte(cred), time.Now)
-		if outcome.Err == oauth.ErrNone {
-			if newRaw, merr := oauth.MarshalBlob(outcome.Blob); merr == nil {
-				_ = credentials.WriteBackup(snap.Slot, a.Email, string(newRaw))
-			}
-			u, ferr = usage.Fetch(client, outcome.Blob.OAuth.AccessToken)
-		} else if outcome.Err.Permanent() {
-			c.recordAuthDead(snap, fp, now)
+		outcome := ConsumeGrant(client, snap.Slot, a.Email, cred)
+		if outcome.Err.Permanent() {
+			c.recordAuthDead(snap, outcome.ConsumedFP, now)
 			snap.Status = StatusReloginRequired
 			return
+		}
+		if outcome.Cred != "" {
+			if nb, perr := oauth.ParseBlob([]byte(outcome.Cred)); perr == nil && nb.OAuth != nil {
+				u, ferr = usage.Fetch(client, nb.OAuth.AccessToken)
+			}
 		}
 	}
 

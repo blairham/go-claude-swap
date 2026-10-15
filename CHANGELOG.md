@@ -11,6 +11,21 @@ file was added.
 
 ## [Unreleased]
 
+### Added
+
+- **Consume gate**, ported from claude-swap: every refresh of a stored
+  backup token (switch, `cswap run`, the usage collector, `cswap auto`)
+  now goes through one per-slot gate. It serializes on
+  `credentials/.consume-<slot>.lock` (shared with claude-swap), re-reads the
+  freshest generation under cswap's lock, POSTs outside it, and persists the
+  successor only when the slot still holds the generation it spent —
+  otherwise the successor is stashed with the `consumedFp` it superseded and
+  the next pass adopts it instead of spending another grant. Two surfaces
+  can no longer both spend the same one-time-use refresh token.
+- `cswap run` spends one gated refresh before seeding a profile, matching
+  claude-swap, and refuses the launch when the refreshed credential could
+  not be stored (the backup would otherwise seed a spent token). (#36)
+
 ## [0.5.0] - 2026-10-10
 
 ### Changed

@@ -174,11 +174,7 @@ cswap config set ui.theme light
 
 ## Not (yet) ported
 
-The macOS menubar extra, and the deepest edge-case machinery of the original
-(consume-gate CAS persistence, provenance oracle probing). Because the
-consume gate is not ported, `cswap run` freshens a backup before seeding a
-profile through the switch path's refresh-near-expiry rather than the
-original's gated one-refresh-per-bootstrap (#36).
+The macOS menubar extra, and the provenance oracle probing of the original.
 
 ## Development
 

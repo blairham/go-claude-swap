@@ -5,6 +5,8 @@ package cmd
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +15,7 @@ import (
 	"github.com/hashicorp/cli"
 
 	"github.com/blairham/go-claude-swap/internal/credentials"
+	"github.com/blairham/go-claude-swap/internal/switcher"
 )
 
 func cmdEnv(t *testing.T) {
@@ -27,6 +30,18 @@ func cmdEnv(t *testing.T) {
 	old := wakeEngine
 	wakeEngine = func() {}
 	t.Cleanup(func() { wakeEngine = old })
+	// Never reach the real token endpoint: `cswap run` spends a refresh
+	// before seeding a profile, and these fixtures' tokens are fake.
+	prevClient := switcher.RefreshClient
+	switcher.RefreshClient = &http.Client{Transport: unreachableEndpoint{}}
+	t.Cleanup(func() { switcher.RefreshClient = prevClient })
+}
+
+// unreachableEndpoint answers every token request 503 (transient).
+type unreachableEndpoint struct{}
+
+func (unreachableEndpoint) RoundTrip(*http.Request) (*http.Response, error) {
+	return &http.Response{StatusCode: 503, Body: io.NopCloser(strings.NewReader("")), Header: http.Header{}}, nil
 }
 
 func TestAddTokenReadsStdinDash(t *testing.T) {

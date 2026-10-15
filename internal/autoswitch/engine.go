@@ -598,20 +598,20 @@ func (e *Engine) freshen(c candidate) bool {
 	if !oauth.Expired(blob.OAuth.ExpiresAt, time.Now().Add(freshenLead)) {
 		return true
 	}
-	outcome := oauth.Refresh(e.client(), []byte(cred), time.Now)
+	outcome := switcher.ConsumeGrant(e.client(), c.slot, c.acct.Email, cred)
 	switch {
 	case outcome.Err == oauth.ErrNone:
-		if raw, merr := oauth.MarshalBlob(outcome.Blob); merr == nil {
-			if werr := credentials.WriteBackup(c.slot, c.acct.Email, string(raw)); werr != nil {
-				e.errorEvent(fmt.Sprintf("writing refreshed backup for Account-%d: %v", c.slot, werr), true)
-			}
-		}
 		return true
 	case outcome.Err.Permanent():
-		e.quarantineSlot(c, string(outcome.Err), cred)
+		e.quarantineSlot(c, string(outcome.Err), outcome.ConsumedFP)
 		return false
 	default:
-		return false // transient: try the next ranked candidate
+		// Transient, another surface mid-refresh, or a spent grant whose
+		// successor is stashed for the next pass: try the next candidate.
+		if outcome.Cred != "" {
+			e.errorEvent(fmt.Sprintf("Account-%d's refreshed credential could not be stored; retrying next pass", c.slot), true)
+		}
+		return false
 	}
 }
 
@@ -709,13 +709,13 @@ func (e *Engine) cooldownRemaining(st *state, now time.Time) float64 {
 
 // quarantineSlot records a dead refresh lineage so the slot is skipped until
 // its credential (or the account) is replaced.
-func (e *Engine) quarantineSlot(c candidate, reason, cred string) {
+func (e *Engine) quarantineSlot(c candidate, reason, fp string) {
 	err := mutateState(func(st *state) bool {
 		st.Quarantine[strconv.Itoa(c.slot)] = &quarantineRecord{
 			Email:                   c.acct.Email,
 			Reason:                  reason,
 			At:                      time.Now().UTC().Format(account.TimeFormat),
-			RefreshTokenFingerprint: oauth.Fingerprint([]byte(cred)),
+			RefreshTokenFingerprint: fp,
 		}
 		return true
 	})

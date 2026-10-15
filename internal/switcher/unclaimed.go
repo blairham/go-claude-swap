@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/blairham/go-claude-swap/internal/locks"
 	"github.com/blairham/go-claude-swap/internal/paths"
 )
 
@@ -72,6 +73,13 @@ func PurgeUnclaimed(id string) error {
 	}
 
 	manifestPath := filepath.Join(paths.CredentialsDir(), ".unclaimed-manifest.json")
+	// The same lock stashCredential writes the manifest under: the consume
+	// gate retires rows while other surfaces stash them.
+	lock := locks.NewFileLock(paths.CredentialsDir() + "/.unclaimed-manifest.lock")
+	if err := lock.Acquire(); err != nil {
+		return err
+	}
+	defer lock.Release()
 	removedRow := false
 	if raw, err := os.ReadFile(manifestPath); err == nil {
 		var m map[string]any

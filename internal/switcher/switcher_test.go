@@ -31,7 +31,18 @@ func env(t *testing.T) string {
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	t.Setenv("CSWAP_DISABLE_KEYCHAIN", "1")
 	os.MkdirAll(filepath.Join(home, ".claude"), 0o700)
+	// No test reaches the real token endpoint: every refresh a test does not
+	// stub answers 503 (transient).
+	prev := RefreshClient
+	RefreshClient = &http.Client{Transport: unreachable{}}
+	t.Cleanup(func() { RefreshClient = prev })
 	return home
+}
+
+type unreachable struct{}
+
+func (unreachable) RoundTrip(*http.Request) (*http.Response, error) {
+	return &http.Response{StatusCode: 503, Body: io.NopCloser(strings.NewReader("")), Header: http.Header{}}, nil
 }
 
 // login simulates Claude Code's /login: it updates oauthAccount and the

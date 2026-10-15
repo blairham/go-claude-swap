@@ -109,15 +109,16 @@ func PrepareSession(selector string, opts SessionOptions) (*SessionPlan, error) 
 	}
 
 	// About to seed from the backup: make it the newest generation first
-	// (a profile that rotated past it is adopted), then freshen it — all
-	// before the lock, since a refresh is network I/O. Never while Claude
-	// Code runs in the profile: refreshing would spend the very refresh
-	// token that running instance holds.
+	// (a profile that rotated past it is adopted), then spend one refresh
+	// through the consume gate so the profile starts on a fresh access
+	// token — all before the lock, since a refresh is network I/O. Never
+	// while Claude Code runs in the profile: refreshing would spend the
+	// very refresh token that running instance holds.
 	if session.Quiescent(dir) {
 		if _, err := adoptSessionCredential(slot, a.Email, a.OrganizationUUID); err != nil {
 			plan.Notes = append(plan.Notes, fmt.Sprintf("could not adopt the session profile's credential: %v", err))
 		}
-		_, warns, ferr := freshenTarget(slot, a.Email, false)
+		warns, ferr := refreshBeforeBootstrap(slot, a.Email)
 		if ferr != nil {
 			return nil, ferr
 		}
@@ -189,6 +190,58 @@ func PrepareSession(selector string, opts SessionOptions) (*SessionPlan, error) 
 			slot,
 		)
 	}
+}
+
+// refreshBeforeBootstrap spends one refresh of a slot's backup through the
+// consume gate, so a profile about to be seeded from it starts on a fresh
+// access token. A transient failure is only a note — the stored token may
+// still be valid and Claude Code refreshes on its own — but a spent grant
+// whose successor could not be persisted refuses: the seed re-reads the
+// backup, so continuing would hand the profile a generation whose first
+// refresh gets invalid_grant. Setup-token accounts have no refresh token
+// and are skipped.
+func refreshBeforeBootstrap(slot int, email string) ([]string, error) {
+	cred, unreadable := credentials.ReadBackup(slot, email)
+	if unreadable || cred == "" || credentials.IsAPIKey(cred) {
+		return nil, nil // the bootstrap produces the authoritative error
+	}
+	if !hasRefreshToken(cred) {
+		return nil, nil
+	}
+	outcome := ConsumeGrant(RefreshClient, slot, email, cred)
+	switch {
+	case outcome.Err == oauth.ErrNone:
+		return nil, nil
+	case outcome.Err.Permanent():
+		if _, warn, ok := recoverFromPrev(slot, email, cred); ok {
+			return []string{warn}, nil
+		}
+		return nil, fmt.Errorf(
+			"stored credentials for Account-%d can no longer be refreshed (%s) — run 'cswap login %d' to re-authenticate it: %w",
+			slot,
+			outcome.Err,
+			slot,
+			oauth.ErrPermanent,
+		)
+	case outcome.Cred != "":
+		return nil, errors.New(spentGrantAdvice(slot, outcome))
+	case outcome.Err == ErrStashUnreadable:
+		return nil, fmt.Errorf(
+			"the refreshed credential for Account-%d is stashed but unreadable right now (Keychain locked or a file permission problem) — fix that and retry; 'cswap unclaimed' lists it",
+			slot,
+		)
+	default:
+		return []string{
+			fmt.Sprintf("could not refresh Account-%d's token (%s); continuing with the stored credentials", slot, outcome.Err),
+		}, nil
+	}
+}
+
+// hasRefreshToken reports whether cred is an OAuth blob that can be
+// refreshed; setup-token accounts carry none by design.
+func hasRefreshToken(cred string) bool {
+	blob, err := oauth.ParseBlob([]byte(cred))
+	return err == nil && blob.OAuth != nil && blob.OAuth.RefreshToken != ""
 }
 
 // profileAhead returns a slot's session-profile credential when it is a

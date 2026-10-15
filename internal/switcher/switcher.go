@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"strings"
@@ -549,11 +550,12 @@ func backupOutgoing(seq *account.Sequence, slot int, liveCred string, liveCfg []
 }
 
 // freshenTarget prepares a slot's stored credential for activation: an
-// OAuth token at or near expiry is refreshed and persisted, so Claude Code
-// never starts on a token it cannot use. When the stored refresh lineage is
-// dead it falls back to the .prev generation before giving up. Returns the
-// refreshed credential ("" when the stored copy is fine as-is), warnings,
-// and an error only when activation would certainly force a re-login.
+// OAuth token at or near expiry is refreshed through the consume gate and
+// persisted, so Claude Code never starts on a token it cannot use. When the
+// stored refresh lineage is dead it falls back to the .prev generation
+// before giving up. Returns the refreshed credential ("" when the stored
+// copy is fine as-is), warnings, and an error only when activation would
+// certainly force a re-login.
 func freshenTarget(slot int, email string, force bool) (string, []string, error) {
 	cred, unreadable := credentials.ReadBackup(slot, email)
 	if unreadable || cred == "" || credentials.IsAPIKey(cred) {
@@ -567,18 +569,10 @@ func freshenTarget(slot int, email string, force bool) (string, []string, error)
 		return "", nil, nil
 	}
 
-	outcome := oauth.Refresh(RefreshClient, []byte(cred), time.Now)
+	outcome := ConsumeGrant(RefreshClient, slot, email, cred)
 	switch {
 	case outcome.Err == oauth.ErrNone:
-		raw, merr := oauth.MarshalBlob(outcome.Blob)
-		if merr != nil {
-			return "", nil, nil
-		}
-		var warns []string
-		if werr := credentials.WriteBackup(slot, email, string(raw)); werr != nil {
-			warns = append(warns, fmt.Sprintf("refreshed Account-%d's token but could not persist the backup: %v", slot, werr))
-		}
-		return string(raw), warns, nil
+		return outcome.Cred, nil, nil
 	case outcome.Err.Permanent():
 		// The primary lineage is dead (e.g. it captured an already-consumed
 		// refresh token); the retained previous generation may still work.
@@ -601,9 +595,29 @@ func freshenTarget(slot int, email string, force bool) (string, []string, error)
 			slot,
 			oauth.ErrPermanent,
 		)
+	case outcome.Cred != "":
+		// The grant was spent but its successor could not be persisted, so
+		// the backup holds a spent generation. The successor in memory is
+		// the only live one: activate it under force, otherwise defer.
+		if force {
+			return outcome.Cred, []string{spentGrantAdvice(slot, outcome)}, nil
+		}
+		return "", nil, errors.New(spentGrantAdvice(slot, outcome))
+	case outcome.Err == ErrStashUnreadable:
+		// The stored generation is spent and its successor is stashed but
+		// unreadable: activating the stored copy would log Claude Code out.
+		msg := fmt.Sprintf(
+			"the refreshed credential for Account-%d is stashed but unreadable right now (Keychain locked or a file permission problem) — fix that and retry; 'cswap unclaimed' lists it",
+			slot,
+		)
+		if force {
+			return "", []string{msg}, nil
+		}
+		return "", nil, errors.New(msg)
 	default:
-		// Transient (network, 5xx): activate as-is — Claude Code retries
-		// the refresh itself once the endpoint is reachable.
+		// Transient (network, 5xx, or another surface mid-refresh):
+		// activate as-is — Claude Code retries the refresh itself once the
+		// endpoint is reachable.
 		return "", []string{
 			fmt.Sprintf(
 				"could not refresh Account-%d's expired token (temporary failure); Claude Code will retry after activation",
@@ -611,6 +625,24 @@ func freshenTarget(slot int, email string, force bool) (string, []string, error)
 			),
 		}, nil
 	}
+}
+
+// spentGrantAdvice explains a demoted gate outcome: the refresh token was
+// spent and its successor could not be stored. A stashed successor is
+// adopted by the next run, so retrying is right; an unstashed one survives
+// only in memory, so the storage failure must be fixed first.
+func spentGrantAdvice(slot int, o GrantOutcome) string {
+	if o.Stashed {
+		return fmt.Sprintf(
+			"the refreshed credential for Account-%d could not be stored, so its backup still holds a spent token; the new one is stashed and the next attempt adopts it automatically — retry",
+			slot,
+		)
+	}
+	return fmt.Sprintf(
+		"the refreshed credential for Account-%d could neither be stored nor stashed, so its backup holds a spent token — fix the storage failure first; if the account then needs it, run 'cswap login %d'",
+		slot,
+		slot,
+	)
 }
 
 // recoverFromPrev tries to revive a slot whose primary backup has a dead
@@ -866,6 +898,12 @@ func relocateBackups(from, to int, a *account.Account) error {
 // an entry file (written first) plus a manifest row. Always plain files,
 // never the Keychain — the abort path must not inherit Keychain failures.
 func StashCredential(cred, reason string, slot int) error {
+	return stashCredential(cred, reason, slot, nil)
+}
+
+// stashCredential is StashCredential with extra manifest fields (the
+// consume gate records consumedFp, the generation a successor superseded).
+func stashCredential(cred, reason string, slot int, extra map[string]any) error {
 	if err := paths.EnsureDirs(); err != nil {
 		return err
 	}
@@ -910,6 +948,7 @@ func StashCredential(cred, reason string, slot int) error {
 		"configSlot":  fmt.Sprint(slot),
 		"fingerprint": fp,
 	}
+	maps.Copy(manifest.Entries[id], extra)
 	data, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return err

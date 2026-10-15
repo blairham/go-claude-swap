@@ -11,6 +11,8 @@ file was added.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-15
+
 ### Added
 
 - **Consume gate**, ported from claude-swap: every refresh of a stored
@@ -129,7 +131,8 @@ file was added.
   auto-switch, roster management, export/import, the TUI, and
   `cswap service` with a gRPC control API the TUI attaches to.
 
-[Unreleased]: https://github.com/blairham/go-claude-swap/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/blairham/go-claude-swap/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/blairham/go-claude-swap/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/blairham/go-claude-swap/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/blairham/go-claude-swap/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/blairham/go-claude-swap/compare/v0.2.0...v0.3.0

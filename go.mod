@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/cli v1.1.7
 	github.com/jessevdk/go-flags v1.6.1
 	golang.org/x/sys v0.48.0
-	golang.org/x/text v0.42.0
+	golang.org/x/text v0.43.0
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
 )
@@ -235,8 +235,8 @@ require (
 	golang.org/x/exp/typeparams v0.0.0-20260811152304-ee035b5b010f // indirect
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/net v0.60.0 // indirect
-	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/tools v0.50.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/tools v0.51.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

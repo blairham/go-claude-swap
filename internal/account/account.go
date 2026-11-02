@@ -139,7 +139,19 @@ func WriteFileAtomic(path string, data []byte, mode os.FileMode) error {
 	return nil
 }
 
-// NextSlot returns the lowest unused slot number, starting at 1.
+// slotOf reports the slot a roster key names. Only the form strconv.Itoa
+// writes is a slot, because that is the key Get, Upsert and Remove address.
+// A hand-edited "01", "+1" or "00" parses as a number but is not where Get
+// looks; reading it as a slot hands the caller a number whose account is
+// somebody else's, or nobody's.
+func slotOf(key string) (int, bool) {
+	n, err := strconv.Atoi(key)
+	return n, err == nil && strconv.Itoa(n) == key
+}
+
+// NextSlot returns the lowest unused slot number, starting at 1. Unlike
+// slotOf it counts every key that parses as a number, so a new slot never
+// lands beside a hand-edited key that reads as the same number.
 func (s *Sequence) NextSlot() int {
 	used := map[int]bool{}
 	for k := range s.Accounts {
@@ -177,8 +189,8 @@ func (s *Sequence) Resolve(selector string) (int, error) {
 		return 0, fmt.Errorf("no account in slot %d", n)
 	}
 	for k, a := range s.Accounts {
-		n, err := strconv.Atoi(k)
-		if err != nil {
+		n, ok := slotOf(k)
+		if !ok {
 			continue // not a slot; nothing can switch to it
 		}
 		if a.Alias == selector || a.Email == selector {
@@ -193,8 +205,8 @@ func (s *Sequence) Resolve(selector string) (int, error) {
 // organizations.
 func (s *Sequence) FindByIdentity(email, orgUUID string) int {
 	for k, a := range s.Accounts {
-		n, err := strconv.Atoi(k)
-		if err != nil {
+		n, ok := slotOf(k)
+		if !ok {
 			continue // not a slot; 0 already means "not found"
 		}
 		if a.Email == email && a.OrganizationUUID == orgUUID {

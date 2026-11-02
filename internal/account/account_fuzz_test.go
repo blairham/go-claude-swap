@@ -47,19 +47,20 @@ func FuzzRoster(f *testing.F) {
 			t.Fatal("Load returned a nil account map")
 		}
 
-		// Every selector the roster itself names must resolve, to a slot
-		// whose account carries it.
+		// Every selector a slot names must resolve, and whatever a selector
+		// resolves to must be a slot whose account carries it.
 		seq.Active()
 		seq.NextSlot()
 		for key, a := range seq.Accounts {
 			if a == nil {
 				t.Fatalf("Load kept a null account in slot %q", key)
 			}
+			// A slot is a key in the form Get looks up. Any other key — "x",
+			// but also "01" or "00", which parse as numbers — is unreachable
+			// by its number, so its alias and email need not reach it either.
 			slot, convErr := strconv.Atoi(key)
-			if convErr != nil {
-				continue // not a slot: unreachable by any selector
-			}
-			if strconv.Itoa(slot) == key {
+			isSlot := convErr == nil && strconv.Itoa(slot) == key
+			if isSlot {
 				if got, resErr := seq.Resolve(key); resErr != nil || got != slot {
 					t.Fatalf("Resolve(%q) = %d, %v; want slot %d", key, got, resErr, slot)
 				}
@@ -72,7 +73,10 @@ func FuzzRoster(f *testing.F) {
 				}
 				n, resErr := seq.Resolve(sel)
 				if resErr != nil {
-					t.Fatalf("Resolve(%q) for the account in slot %q: %v", sel, key, resErr)
+					if isSlot {
+						t.Fatalf("Resolve(%q) for the account in slot %q: %v", sel, key, resErr)
+					}
+					continue
 				}
 				if b := seq.Get(n); b == nil || (b.Alias != sel && b.Email != sel) {
 					t.Fatalf("Resolve(%q) = slot %d, which does not carry it", sel, n)

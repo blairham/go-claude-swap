@@ -94,6 +94,40 @@ func TestResolve(t *testing.T) {
 	}
 }
 
+// A hand-edited key that parses as a number but is not the form Get looks up
+// ("01", "+2", "00") is not a slot. Reading it as one handed callers another
+// account's slot: with "1" holding x and "01" holding y, removing y removed
+// slot 1 and x's backup, and capturing y again rewrote slot 1's x as y.
+func TestNonCanonicalKeyIsNotASlot(t *testing.T) {
+	seq := &Sequence{Accounts: map[string]*Account{
+		"1":  {Email: "x@y.z"},
+		"01": {Email: "y@y.z", Alias: "padded"},
+		"+2": {Email: "plus@y.z"},
+		"00": {Email: "zero@y.z"},
+	}}
+	for _, sel := range []string{"y@y.z", "padded", "plus@y.z", "zero@y.z"} {
+		if n, err := seq.Resolve(sel); err == nil {
+			t.Errorf("Resolve(%q) = slot %d, which holds %+v; want no match", sel, n, seq.Get(n))
+		}
+	}
+	for _, email := range []string{"y@y.z", "plus@y.z", "zero@y.z"} {
+		if n := seq.FindByIdentity(email, ""); n != 0 {
+			t.Errorf("FindByIdentity(%q) = slot %d, which holds %+v; want 0", email, n, seq.Get(n))
+		}
+	}
+	if n, err := seq.Resolve("x@y.z"); err != nil || n != 1 {
+		t.Errorf("Resolve(x@y.z) = %d, %v; want 1", n, err)
+	}
+	if n := seq.FindByIdentity("x@y.z", ""); n != 1 {
+		t.Errorf("FindByIdentity(x@y.z) = %d; want 1", n)
+	}
+	// NextSlot stays wary of them: no new slot lands beside a key that
+	// reads as the same number.
+	if got := seq.NextSlot(); got != 3 {
+		t.Errorf("NextSlot = %d, want 3", got)
+	}
+}
+
 func TestNextSlotFillsGaps(t *testing.T) {
 	withHome(t)
 	seq, _ := Load()

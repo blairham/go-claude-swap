@@ -19,7 +19,5 @@ Steps:
 
 If `$ARGUMENTS` is `check`, only report drift — do not run `make sync`.
 
-`.github/workflows/ci.yml` pins `GO_VERSION` to the minor line (`"1.26"`), which
-setup-go resolves to the latest patch — that tracks automatically and is not part
-of the exact-match invariant. If the minor version itself changes in `go.mod`,
-update the workflow too.
+CI reads the Go version from `go.mod` (`go-version-file`), so moving the
+`go` directive moves CI with it; there is no separate workflow pin to update.

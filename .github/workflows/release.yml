@@ -1,9 +1,9 @@
 name: Release
 
 # A v* tag is the release. blairham/.github's go-release.yml runs GoReleaser,
-# which publishes the cswap archives and the Homebrew formula (with its
-# `service` block), signs checksums.txt with keyless cosign, and attests
-# build provenance for every archive. The notes are the tag's CHANGELOG.md
+# which publishes the cswap archives and the Homebrew formula (a source
+# build plus bottles, with its `service` block), signs checksums.txt with
+# keyless cosign, and attests build provenance for every archive. The notes are the tag's CHANGELOG.md
 # section. The signing identity is go-release.yml itself; SECURITY.md shows
 # how to verify it.
 on:
@@ -33,10 +33,12 @@ jobs:
       contents: write # the GitHub release and its assets
       id-token: write # keyless cosign and provenance signing
       attestations: write # store the provenance in the repository's attestations
-    uses: blairham/.github/.github/workflows/go-release.yml@2a975269ebbb74aa0b4ec96f45773d7d68cc7bcc # v0.0.3
+    uses: blairham/.github/.github/workflows/go-release.yml@ed30c1599f3dae98165801429893d397069b433c # v0.0.4
     with:
       tag: ${{ inputs.tag }}
       snapshot: ${{ inputs.dry-run == true }}
+      # blairham/goreleaser, for homebrew_bottles (goreleaser/goreleaser#7342).
+      goreleaser-ref: 6b2bad9d43ac7c6469cd2607a8b79bbbcbbc4b80
     secrets:
       # A token with contents:write on blairham/homebrew-tap.
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

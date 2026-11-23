@@ -79,36 +79,35 @@ snapshot:
 # list. Do not set `changelog.disable`: it skips the stage that reads
 # --release-notes too.
 
-# A formula (not a cask like the other tap entries) so the tap can carry a
-# `service` block: `brew services start blairham/tap/cswap` then runs the
-# auto-switch loop under launchd/systemd with keep-alive and start-at-login.
 # A formula, not a cask. cswap is the one tool here that ships a daemon, and
 # only formulae have a `service` stanza — a cask cannot integrate with
-# `brew services` at all. Formulae also work on Homebrew for Linux exactly as
-# they do on macOS.
+# `brew services` at all: `brew services start blairham/tap/cswap` runs the
+# auto-switch loop under launchd/systemd with keep-alive and start-at-login.
+# Formulae also work on Homebrew for Linux exactly as they do on macOS.
 #
-# GoReleaser marks `brews` deprecated in favor of `homebrew_casks`, on the
-# grounds that formulae installing pre-compiled binaries are "hackyish" and
-# were only needed because Linuxbrew could not handle casks. There is no
-# announced removal date, and the Linuxbrew limitation is not our reason for
-# using them.
+# The formula builds from the source archive below (`brew install -s`) and
+# pours bottles made from the release's darwin and linux cswap binaries, the
+# way homebrew-core ships a CLI, rather than a formula that only downloads a
+# prebuilt archive (what GoReleaser's deprecated `brews` produced).
+# homebrew_bottles comes from blairham/goreleaser
+# (goreleaser/goreleaser#7342), which release.yml selects with
+# goreleaser-ref; official GoReleaser rejects this key.
 #
 # Note there is no quarantine hook here: casks flag their downloads with
 # com.apple.quarantine and need it stripped, formulae do not.
-brews:
+homebrew_bottles:
   - name: cswap
+    ids:
+      - cswap
     repository:
       owner: blairham
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    directory: Formula
     homepage: https://github.com/blairham/go-claude-swap
     description: Multi-account manager for Claude Code (Go rewrite of claude-swap)
     license: Apache-2.0
     # A prerelease does not move the formula.
     skip_upload: auto
-    install: |
-      bin.install "cswap"
     service: |
       run [opt_bin/"cswap", "auto", "--log-file", var/"log/cswap-auto.log"]
       keep_alive true
@@ -116,6 +115,10 @@ brews:
       error_log_path var/"log/cswap-auto.log"
     test: |
       system "#{bin}/cswap", "--version"
+
+# The tarball the formula's `url` points at, for building from source.
+source:
+  enabled: true
 
 release:
   draft: false

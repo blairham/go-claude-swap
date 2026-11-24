@@ -1,0 +1,125 @@
+name: PR title
+
+# The pull request title is the changelog entry and the version bump: a squash
+# merge makes it the commit subject on main (the repository's squash title is
+# set to PR_TITLE, so a one-commit PR cannot slip its own subject in instead),
+# and release-please reads the bump from it (CONTRIBUTING.md). So the title
+# must be a Conventional Commit — `feat(builds): …`, `fix: …`, `feat!: …` —
+# and this check, required by the main ruleset, fails one that is not.
+#
+# On release-please's own pull request it also re-checks every commit the
+# release would carry. release-please skips a subject it cannot parse without
+# a word, so a commit that reached main some other way would silently miss the
+# changelog and the bump; here it fails the release instead, naming the commit.
+#
+# Gate steps, never the job: a required check whose job is skipped never
+# reports and stays pending forever.
+on:
+  pull_request:
+    # `edited` re-runs the check when only the title changes.
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read # the merged PR behind each commit, for its override block
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  # One definition for both steps. The types are the Conventional Commits set;
+  # which of them appear in the changelog is release-please-config.json's.
+  CONVENTIONAL: '^(feat|fix|perf|revert|docs|ci|build|refactor|test|chore|style)(\([[:alnum:]_./-]+\))?!?: [^[:space:]]'
+
+jobs:
+  title:
+    name: PR title
+    runs-on: ubuntu-latest
+    steps:
+      - name: The title is a Conventional Commit
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          set -euo pipefail
+          # Dependabot titles its PRs "Bump …" until the baseline's
+          # dependabot.yml gives it a commit-message prefix.
+          if [ "$AUTHOR" = "dependabot[bot]" ]; then
+            echo "::notice::dependabot pull request; title not checked"
+            exit 0
+          fi
+          if ! printf '%s' "$TITLE" | grep -Eq "$CONVENTIONAL"; then
+            echo "::error::the title must be a Conventional Commit: 'feat(scope): …' (minor), 'fix: …' (patch), 'feat!: …' (breaking), or docs/ci/build/refactor/test/chore/style for a change nobody using cswap can see. See CONTRIBUTING.md."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: startsWith(github.head_ref, 'release-please--')
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Every commit in the release is a Conventional Commit
+        if: startsWith(github.head_ref, 'release-please--')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git fetch --quiet --tags origin main
+          # The range is what this release carries: since the last tag, or —
+          # before the first release-please release — since release-please was
+          # set up, so the history before it is not held to a rule it predates.
+          tag="$(git describe --tags --abbrev=0 --match 'v*' origin/main)"
+          setup="$(git log --format=%H --diff-filter=A -1 origin/main -- release-please-config.json)"
+          if git merge-base --is-ancestor "$setup" "$tag"; then base="$tag"; else base="$setup^"; fi
+
+          # What release-please reads for a commit, ported from its
+          # src/commit.ts: when the merged PR's body contains
+          # BEGIN_COMMIT_OVERRIDE anywhere (even quoted in prose), the text
+          # after the FIRST occurrence up to END_COMMIT_OVERRIDE replaces the
+          # commit message, for every commit, conventional or not. That text
+          # is split into several messages only at a blank line followed by a
+          # type (and at BEGIN_NESTED_COMMIT blocks). Prints one subject per
+          # message, or nothing when the body has no override.
+          override_subjects() {
+            python3 -c '
+          import re, sys
+          body = sys.stdin.read()
+          parts = body.split("BEGIN_COMMIT_OVERRIDE")
+          msg = (parts[1] if len(parts) > 1 else "").split("END_COMMIT_OVERRIDE")[0].strip()
+          if not msg:
+              sys.exit(0)
+          nested = msg.split("BEGIN_NESTED_COMMIT")
+          msgs = [nested.pop(0)]
+          for part in nested:
+              new, *rest = part.split("END_NESTED_COMMIT")
+              msgs.append(new)
+              msgs[0] += "END_NESTED_COMMIT".join(rest)
+          types = "feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert"
+          split = re.split(r"\r?\n\r?\n(?=(?:" + types + r")(?:\(.*?\))?: )", msgs[0])
+          for m in [m for m in split if m] + msgs[1:]:
+              print(m.strip().splitlines()[0] if m.strip() else "")
+          '
+          }
+
+          bad=0
+          while IFS=$'\t' read -r sha author subject; do
+            [ "$author" = "dependabot[bot]" ] && continue
+            body="$(gh api "repos/$REPO/commits/$sha/pulls" -q '.[0].body // ""')"
+            subjects="$(printf '%s' "$body" | override_subjects)"
+            if [ -z "$subjects" ]; then
+              printf '%s' "$subject" | grep -Eq "$CONVENTIONAL" && continue
+              echo "::error::${sha:0:7} \"$subject\" is not a Conventional Commit, so release-please leaves it out of this release. Edit its merged pull request's body to add a commit-override block (CONTRIBUTING.md), then re-run this check."
+              bad=1
+              continue
+            fi
+            if printf '%s\n' "$subjects" | grep -Evq "$CONVENTIONAL"; then
+              echo "::error::${sha:0:7}: release-please reads its merged pull request's commit-override block instead of the subject, and these messages in it are not Conventional Commits:"
+              printf '%s\n' "$subjects" | grep -Ev "$CONVENTIONAL" | sed 's/^/  /'
+              echo "::error::Separate messages with a blank line, and do not write the block's opening marker anywhere else in the body: release-please starts at its first occurrence (CONTRIBUTING.md)."
+              bad=1
+            fi
+          done < <(git log --format='%H%x09%an%x09%s' "$base..origin/main")
+          exit "$bad"

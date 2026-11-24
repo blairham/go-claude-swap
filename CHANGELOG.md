@@ -9,7 +9,10 @@ Pre-stable releases (`v0.x.y`) make no API-stability promise -- breaking changes
 Entries before 0.5.0 were reconstructed from the commit history when this
 file was added.
 
-## [Unreleased]
+A release's notes are its section here. From the release after 0.6.0 on,
+release-please writes each section from the Conventional Commit titles of
+the pull requests it carries (see CONTRIBUTING.md); edit a title, not this
+file.
 
 ## [0.6.0] - 2026-10-15
 
@@ -131,7 +134,6 @@ file was added.
   auto-switch, roster management, export/import, the TUI, and
   `cswap service` with a gRPC control API the TUI attaches to.
 
-[Unreleased]: https://github.com/blairham/go-claude-swap/compare/v0.6.0...HEAD
 [0.6.0]: https://github.com/blairham/go-claude-swap/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/blairham/go-claude-swap/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/blairham/go-claude-swap/compare/v0.3.0...v0.4.0
